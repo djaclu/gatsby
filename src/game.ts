@@ -112,7 +112,7 @@ class Game {
       this.characterImage = null;
     };
     // Load feistyGatsby.png as the character sprite
-    img.src = "assets/feistyGatsby.png";
+    img.src = "/assets/feistyGatsby.png";
   }
 
   private loadObstacleImage(): void {
@@ -125,12 +125,12 @@ class Game {
       this.obstacleImage = null;
     };
     // Load SAM.png as the obstacle image
-    img.src = "assets/SAM.png";
+    img.src = "/assets/SAM.png";
   }
 
   private loadFont(): void {
     // Load the Tiny5 font for canvas rendering
-    const font = new FontFace("Tiny5", "url(fonts/Tiny5-Regular.ttf)");
+    const font = new FontFace("Tiny5", "url(/fonts/Tiny5-Regular.ttf)");
     font
       .load()
       .then((loadedFont) => {
@@ -269,7 +269,7 @@ class Game {
     // Add heart images for each life
     for (let i = 0; i < this.lives; i++) {
       const heartImg = document.createElement("img");
-      heartImg.src = "assets/life.png";
+      heartImg.src = "/assets/life.png";
       heartImg.alt = "Life";
       this.livesDisplay.appendChild(heartImg);
     }
