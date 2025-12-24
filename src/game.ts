@@ -29,16 +29,16 @@ const CONFIG = {
 // const DEBUG = true;
 
 // Obstacle image paths - add any number of images here
-const OBSTACLE_IMAGE_PATHS = ["assets/DAN.png", "assets/SAM.png"];
+const OBSTACLE_IMAGE_PATHS = ["/assets/DAN.png", "/assets/SAM.png"];
 
 // Tree image paths - add any number of images here
 const TREE_IMAGE_PATHS = [
-  "assets/trees/tree1.png",
-  "assets/trees/tree2.png",
-  "assets/trees/tree3.png",
-  "assets/trees/tree4.png",
-  "assets/trees/tree5.png",
-  "assets/trees/tree6.png",
+  "/assets/trees/tree1.png",
+  "/assets/trees/tree2.png",
+  "/assets/trees/tree3.png",
+  "/assets/trees/tree4.png",
+  "/assets/trees/tree5.png",
+  "/assets/trees/tree6.png",
 ];
 
 // Calculate jump strength based on jump height in blocks
@@ -268,8 +268,8 @@ export class Game {
   private loadMadObstacleImage(): void {
     // Load mad images for each obstacle type
     const madImageMap: { [key: string]: string } = {
-      "assets/DAN.png": "assets/DAN-MAD.png",
-      "assets/SAM.png": "assets/SAM-MAD.png",
+      "/assets/DAN.png": "/assets/DAN-MAD.png",
+      "/assets/SAM.png": "/assets/SAM-MAD.png",
     };
 
     OBSTACLE_IMAGE_PATHS.forEach((originalPath) => {

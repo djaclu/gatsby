@@ -1,35 +1,40 @@
-import { defineConfig } from 'vite';
-import { copyFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { defineConfig } from "vite";
+import { copyFileSync, mkdirSync, existsSync, readdirSync, statSync } from "fs";
+import { join } from "path";
 
 // Plugin to copy assets, fonts, and style.css to dist
 function copyAssetsPlugin() {
   return {
-    name: 'copy-assets',
+    name: "copy-assets",
     writeBundle() {
-      const distDir = 'dist';
-      const assetsDir = join(distDir, 'assets');
-      const fontsDir = join(distDir, 'fonts');
+      const distDir = "dist";
+      const assetsDir = join(distDir, "assets");
+      const fontsDir = join(distDir, "fonts");
 
-      // Copy assets folder
-      if (existsSync('assets')) {
-        if (!existsSync(assetsDir)) mkdirSync(assetsDir, { recursive: true });
-        const files = readdirSync('assets');
-        files.forEach(file => {
-          const src = join('assets', file);
-          const dest = join(assetsDir, file);
-          if (statSync(src).isFile()) {
-            copyFileSync(src, dest);
-          }
-        });
+      // Recursively copy assets folder (including subdirectories)
+      function copyRecursive(src: string, dest: string) {
+        if (!existsSync(src)) return;
+
+        if (statSync(src).isDirectory()) {
+          if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
+          const files = readdirSync(src);
+          files.forEach((file) => {
+            copyRecursive(join(src, file), join(dest, file));
+          });
+        } else {
+          copyFileSync(src, dest);
+        }
       }
 
+      // Copy assets folder (recursively)
+      copyRecursive("assets", assetsDir);
+
       // Copy fonts folder
-      if (existsSync('fonts')) {
+      if (existsSync("fonts")) {
         if (!existsSync(fontsDir)) mkdirSync(fontsDir, { recursive: true });
-        const files = readdirSync('fonts');
-        files.forEach(file => {
-          const src = join('fonts', file);
+        const files = readdirSync("fonts");
+        files.forEach((file) => {
+          const src = join("fonts", file);
           const dest = join(fontsDir, file);
           if (statSync(src).isFile()) {
             copyFileSync(src, dest);
@@ -38,8 +43,8 @@ function copyAssetsPlugin() {
       }
 
       // Copy style.css
-      if (existsSync('style.css')) {
-        copyFileSync('style.css', join(distDir, 'style.css'));
+      if (existsSync("style.css")) {
+        copyFileSync("style.css", join(distDir, "style.css"));
       }
     },
   };
@@ -48,4 +53,3 @@ function copyAssetsPlugin() {
 export default defineConfig({
   plugins: [copyAssetsPlugin()],
 });
-
