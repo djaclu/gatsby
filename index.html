@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gatsby's World</title>
     <link rel="stylesheet" href="/style.css">
 </head>
@@ -10,20 +10,54 @@
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
         <div id="start-screen" class="screen">
-            <img src="/assets/PeacefulGatsby.png" alt="Gatsby" id="start-screen-image">
+            <img src="/assets/gatsby.png" alt="Gatsby" id="start-screen-image">
             <h1>Gatsby's World</h1>
-            <p>press <span style="color: #ffd700;">ENTER</span> to play</p>
+            <div id="difficulty-selector" class="menu-option selected">
+                <span class="difficulty-arrow">◄</span>
+                <span id="difficulty-text">Medium</span>
+                <span class="difficulty-arrow">►</span>
+            </div>
+            <div id="music-selector" class="menu-option">
+                <span class="difficulty-arrow">◄</span>
+                <span id="music-text">off</span>
+                <span class="difficulty-arrow">►</span>
+            </div>
+            <button id="start-btn" class="game-button">Start</button> 
         </div>
         <div id="game-over-screen" class="screen hidden">
+            <img src="/assets/sadG.png" alt="Sad Gatsby" id="game-over-image">
             <h1>Game Over</h1>
-            <p>Score: <span id="final-score">0</span></p>
+            <p>Final Score: <span id="final-score">0</span></p>
             <div class="button-container">
+                <button id="return-start-btn" class="game-button">Menu</button>
                 <button id="try-again-btn" class="game-button">Try Again</button>
-                <button id="return-start-btn" class="game-button">Return to Start</button>
             </div>
         </div>
-        <div id="score-display" class="hidden">Score: <span id="score-value">0</span></div>
-        <div id="lives-display" class="hidden"></div>
+        <div id="top-ui-container" class="hidden">
+            <div id="score-display">Score: <span id="score-value">0</span></div>
+            <div id="lives-display"></div>
+            <button id="quit-btn" class="game-button">Quit</button>
+        </div>
+        <div id="instructions" class="hidden">
+            <div class="instruction-item desktop-only">
+                <p>↑ Jump / Double Jump</p>
+            </div>
+            <div class="instruction-item desktop-only">
+                <p>[ Space ] Bark</p>
+            </div>
+            <div class="instruction-item desktop-only">
+                <p>← → Change Difficulty</p>
+            </div>
+            <div class="instruction-item mobile-only">
+                <p>Tap Jump / Double Tap</p>
+            </div>
+            <div class="instruction-item mobile-only">
+                <p>Swipe Right Bark</p>
+            </div>
+            <div class="instruction-item mobile-only">
+                <p>Swipe ← → Difficulty</p>
+            </div>
+        </div>
     </div>
     <script type="module" src="/src/game.ts"></script>
 </body>

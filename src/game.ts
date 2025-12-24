@@ -1,3 +1,9 @@
+import {
+  DifficultyLevel,
+  updateDifficultyDisplay,
+  changeDifficulty,
+} from "./difficulty/helpers/difficulty";
+
 // Game configuration
 const CONFIG = {
   CANVAS_WIDTH: 800,
@@ -12,10 +18,28 @@ const CONFIG = {
   BLOCK_SIZE: 40,
   FLOOR_SYMBOL: "-",
   FLOOR_SPEED: 3,
+  TREE_SPEED: 1, // Trees move slower than obstacles for parallax effect
+  TREE_SPAWN_MIN_FRAMES: 150, // Minimum frames between tree spawns
+  TREE_SPAWN_MAX_FRAMES: 400, // Maximum frames between tree spawns
+  TREE_MIN_HEIGHT: 320, // Minimum tree height (8 blocks * 40 = 320)
+  TREE_MAX_HEIGHT: 400, // Maximum tree height (10 blocks * 40 = 400)
 };
 
 // Debug mode - set to true to draw both blocks and images for obstacles
-const DEBUG = true;
+// const DEBUG = true;
+
+// Obstacle image paths - add any number of images here
+const OBSTACLE_IMAGE_PATHS = ["assets/DAN.png", "assets/SAM.png"];
+
+// Tree image paths - add any number of images here
+const TREE_IMAGE_PATHS = [
+  "assets/trees/tree1.png",
+  "assets/trees/tree2.png",
+  "assets/trees/tree3.png",
+  "assets/trees/tree4.png",
+  "assets/trees/tree5.png",
+  "assets/trees/tree6.png",
+];
 
 // Calculate jump strength based on jump height in blocks
 // Using physics: v^2 = 2gh, so v = sqrt(2gh)
@@ -24,29 +48,49 @@ const JUMP_STRENGTH = -Math.sqrt(
   2 * CONFIG.GRAVITY * CONFIG.JUMP_HEIGHT * CONFIG.BLOCK_SIZE
 );
 
+const DEBUG = false;
+
 // Game state
 enum GameState {
   START,
   PLAYING,
+  GAME_OVER_ANIMATING,
   GAME_OVER,
 }
-
-class Game {
+export class Game {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private state: GameState = GameState.START;
   private score: number = 0;
+  difficulty: DifficultyLevel = DifficultyLevel.MEDIUM;
 
   // Character
   private characterX: number = CONFIG.CHARACTER_START_X;
   private characterY: number = CONFIG.FLOOR_Y - CONFIG.CHARACTER_SIZE;
   private characterVelocityY: number = 0;
   private characterImage: HTMLImageElement | null = null;
-  private obstacleImage: HTMLImageElement | null = null;
+  private characterBarkImage: HTMLImageElement | null = null;
+  private isBarking: boolean = false; // Track if character is in bark animation
+  private obstacleImages: { image: HTMLImageElement; path: string }[] = [];
+  private madObstacleImages: Map<string, HTMLImageElement> = new Map(); // Maps original image path to mad image
   private canDoubleJump: boolean = false;
   private hasDoubleJumped: boolean = false;
   private lives: number = 3;
   private isInCollision: boolean = false;
+  // Touch controls
+  private lastTapTime: number = 0;
+  private tapDelay: number = 300; // Milliseconds between taps for double tap
+  private touchStartX: number = 0;
+  private touchStartY: number = 0;
+  private touchStartTime: number = 0;
+  private swipeThreshold: number = 50; // Minimum distance for swipe
+  private characterRotation: number = 0; // Rotation in degrees for game over animation
+  private gameOverAnimationTime: number = 0; // Time elapsed in animation
+  private gameOverAnimationDuration: number = 2000; // Animation duration in milliseconds
+  private shakeTime: number = 0; // Time elapsed in shake animation
+  private shakeDuration: number = 2000; // Shake animation duration in milliseconds
+  private shakeOffsetX: number = 0; // Current shake offset in X direction
+  private shakeOffsetY: number = 0; // Current shake offset in Y direction
 
   // Floor
   private floorOffset: number = 0;
@@ -54,7 +98,15 @@ class Game {
   // Obstacles
   private obstacles: Obstacle[] = [];
   private obstacleTimer: number = 0;
-  private obstacleSpacing: number = CONFIG.OBSTACLE_SPACING;
+  obstacleSpacing: number = CONFIG.OBSTACLE_SPACING;
+  private obstacleSpacingHistory: number[] = []; // Track last 3 spacing values
+
+  // Trees (background parallax)
+  private trees: Tree[] = [];
+  private treeImages: HTMLImageElement[] = [];
+  private treeTimer: number = 0;
+  private treeSpawnCounter: number = 0;
+  private nextTreeSpawnFrame: number = 0; // Random frame count until next spawn
 
   // UI Elements
   private startScreen: HTMLElement;
@@ -64,13 +116,24 @@ class Game {
   private finalScore: HTMLElement;
   private tryAgainBtn: HTMLButtonElement;
   private returnStartBtn: HTMLButtonElement;
+  private startBtn: HTMLButtonElement;
   private livesDisplay: HTMLElement;
+  difficultyText: HTMLElement;
+  private instructions: HTMLElement;
+  private quitBtn: HTMLButtonElement;
+  private topUIContainer: HTMLElement;
+  private difficultySelector!: HTMLElement;
+  private musicSelector!: HTMLElement;
+  private musicText!: HTMLElement;
+  private backgroundMusic: HTMLAudioElement | null = null;
+  private isMusicOn: boolean = false;
+  private selectedMenuOption: "difficulty" | "music" = "difficulty";
 
   constructor() {
     this.canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d")!;
-    this.canvas.width = CONFIG.CANVAS_WIDTH;
-    this.canvas.height = CONFIG.CANVAS_HEIGHT;
+    this.setupCanvasSize();
+    window.addEventListener("resize", () => this.setupCanvasSize());
 
     // Load UI elements
     this.startScreen = document.getElementById("start-screen")!;
@@ -79,6 +142,14 @@ class Game {
     this.scoreValue = document.getElementById("score-value")!;
     this.finalScore = document.getElementById("final-score")!;
     this.livesDisplay = document.getElementById("lives-display")!;
+    this.difficultyText = document.getElementById("difficulty-text")!;
+    this.difficultySelector = document.getElementById("difficulty-selector")!;
+    this.musicSelector = document.getElementById("music-selector")!;
+    this.musicText = document.getElementById("music-text")!;
+    this.instructions = document.getElementById("instructions")!;
+    this.topUIContainer = document.getElementById("top-ui-container")!;
+    this.quitBtn = document.getElementById("quit-btn") as HTMLButtonElement;
+    this.startBtn = document.getElementById("start-btn") as HTMLButtonElement;
     this.tryAgainBtn = document.getElementById(
       "try-again-btn"
     ) as HTMLButtonElement;
@@ -86,17 +157,50 @@ class Game {
       "return-start-btn"
     ) as HTMLButtonElement;
 
+    // Initialize difficulty display
+    this.difficultyText.textContent = DifficultyLevel[this.difficulty];
+
+    // Show instructions on start screen
+    this.instructions.classList.remove("hidden");
+
     // Try to load character image, fallback to rectangle if not found
     this.loadCharacterImage();
 
     // Load obstacle image
     this.loadObstacleImage();
 
+    // Load character bark image
+    this.loadCharacterBarkImage();
+
+    // Load mad obstacle image
+    this.loadMadObstacleImage();
+
+    // Load tree images
+    this.loadTreeImages();
+
+    // Initialize tree spawn timer
+    this.nextTreeSpawnFrame =
+      CONFIG.TREE_SPAWN_MIN_FRAMES +
+      Math.floor(
+        Math.random() *
+          (CONFIG.TREE_SPAWN_MAX_FRAMES - CONFIG.TREE_SPAWN_MIN_FRAMES)
+      );
+
+    // Load music preference from localStorage
+    this.loadMusicPreference();
+
+    // Initialize background music
+    this.initializeBackgroundMusic();
+
+    // Update menu selection display
+    this.updateMenuSelection();
+
     // Load font
     this.loadFont();
 
     // Setup event listeners
     this.setupEventListeners();
+    this.setupTouchControls();
 
     // Start game loop
     this.gameLoop();
@@ -111,21 +215,98 @@ class Game {
       // If image doesn't exist, we'll draw a rectangle instead
       this.characterImage = null;
     };
-    // Load feistyGatsby.png as the character sprite
-    img.src = "/assets/feistyGatsby.png";
+    // Load GBY.png as the character sprite
+    img.src = "/assets/GBY.png";
+  }
+
+  private loadCharacterBarkImage(): void {
+    const img = new Image();
+    img.onload = () => {
+      this.characterBarkImage = img;
+    };
+    img.onerror = () => {
+      console.warn("Failed to load character bark image: /assets/GBY-BARK.png");
+      this.characterBarkImage = null;
+    };
+    // Load GBY-BARK.png for bark animation
+    img.src = "/assets/GBY-BARK.png";
   }
 
   private loadObstacleImage(): void {
-    const img = new Image();
-    img.onload = () => {
-      this.obstacleImage = img;
+    // Load all obstacle images from the paths array
+    let loadedCount = 0;
+    const totalImages = OBSTACLE_IMAGE_PATHS.length;
+
+    OBSTACLE_IMAGE_PATHS.forEach((imagePath) => {
+      const img = new Image();
+      img.onload = () => {
+        this.obstacleImages.push({ image: img, path: imagePath });
+        loadedCount++;
+      };
+      img.onerror = () => {
+        // If image doesn't exist, skip it
+        console.warn(`Failed to load obstacle image: ${imagePath}`);
+        loadedCount++;
+      };
+      img.src = imagePath;
+    });
+  }
+
+  private getRandomObstacleImage(): {
+    image: HTMLImageElement | null;
+    path: string | null;
+  } {
+    if (this.obstacleImages.length === 0) {
+      return { image: null, path: null };
+    }
+    // Randomly select an image from the loaded images
+    const randomIndex = Math.floor(Math.random() * this.obstacleImages.length);
+    const obstacleData = this.obstacleImages[randomIndex];
+    return { image: obstacleData.image, path: obstacleData.path };
+  }
+
+  private loadMadObstacleImage(): void {
+    // Load mad images for each obstacle type
+    const madImageMap: { [key: string]: string } = {
+      "assets/DAN.png": "assets/DAN-MAD.png",
+      "assets/SAM.png": "assets/SAM-MAD.png",
     };
-    img.onerror = () => {
-      // If image doesn't exist, obstacles will use default blocks
-      this.obstacleImage = null;
-    };
-    // Load SAM.png as the obstacle image
-    img.src = "/assets/SAM.png";
+
+    OBSTACLE_IMAGE_PATHS.forEach((originalPath) => {
+      const madPath = madImageMap[originalPath];
+      if (madPath) {
+        const img = new Image();
+        img.onload = () => {
+          this.madObstacleImages.set(originalPath, img);
+        };
+        img.onerror = () => {
+          console.warn(`Failed to load mad obstacle image: ${madPath}`);
+        };
+        img.src = madPath;
+      }
+    });
+  }
+
+  private loadTreeImages(): void {
+    // Load all tree images from the paths array
+    TREE_IMAGE_PATHS.forEach((imagePath) => {
+      const img = new Image();
+      img.onload = () => {
+        this.treeImages.push(img);
+      };
+      img.onerror = () => {
+        console.warn(`Failed to load tree image: ${imagePath}`);
+      };
+      img.src = imagePath;
+    });
+  }
+
+  private getRandomTreeImage(): HTMLImageElement | null {
+    if (this.treeImages.length === 0) {
+      return null;
+    }
+    const randomIndex = Math.floor(Math.random() * this.treeImages.length);
+    return this.treeImages[randomIndex];
   }
 
   private loadFont(): void {
@@ -146,17 +327,65 @@ class Game {
       if (e.key === "Enter") {
         if (this.state === GameState.START) {
           this.startGame();
-        } else if (this.state === GameState.PLAYING) {
-          // Destroy one block from the nearest obstacle
-          this.destroyBlock();
         }
       } else if (e.key === " " && this.state === GameState.PLAYING) {
         e.preventDefault();
+        // Destroy one block from the nearest obstacle
+        this.destroyBlock();
+      } else if (e.key === "ArrowUp" && this.state === GameState.PLAYING) {
+        e.preventDefault();
         this.jump();
+      } else if (this.state === GameState.START) {
+        // Handle menu navigation and selection
+        // Check both e.key and e.code for better browser compatibility
+        const isArrowDown =
+          e.key === "ArrowDown" || e.code === "ArrowDown" || e.keyCode === 40;
+        const isArrowUp =
+          e.key === "ArrowUp" || e.code === "ArrowUp" || e.keyCode === 38;
+        const isArrowLeft =
+          e.key === "ArrowLeft" || e.code === "ArrowLeft" || e.keyCode === 37;
+        const isArrowRight =
+          e.key === "ArrowRight" || e.code === "ArrowRight" || e.keyCode === 39;
+
+        if (isArrowDown) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Toggle between difficulty and music
+          this.selectedMenuOption =
+            this.selectedMenuOption === "difficulty" ? "music" : "difficulty";
+          this.updateMenuSelection();
+        } else if (isArrowUp) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Toggle between difficulty and music (reverse)
+          this.selectedMenuOption =
+            this.selectedMenuOption === "difficulty" ? "music" : "difficulty";
+          this.updateMenuSelection();
+        } else if (isArrowLeft || isArrowRight) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (this.selectedMenuOption === "difficulty") {
+            // Change difficulty
+            if (isArrowLeft) {
+              changeDifficulty(this, -1);
+            } else {
+              changeDifficulty(this, 1);
+            }
+          } else if (this.selectedMenuOption === "music") {
+            // Toggle music (both left and right toggle on/off)
+            this.toggleMusic(!this.isMusicOn);
+          }
+        }
       }
     });
 
     // Button event listeners
+    this.startBtn.addEventListener("click", () => {
+      if (this.state === GameState.START) {
+        this.startGame();
+      }
+    });
+
     this.tryAgainBtn.addEventListener("click", () => {
       if (this.state === GameState.GAME_OVER) {
         this.restartGame();
@@ -168,14 +397,127 @@ class Game {
         this.returnToStart();
       }
     });
+
+    this.quitBtn.addEventListener("click", () => {
+      if (
+        this.state === GameState.PLAYING ||
+        this.state === GameState.GAME_OVER_ANIMATING
+      ) {
+        // Force game over
+        this.finishGameOver();
+      }
+    });
+  }
+
+  private setupCanvasSize(): void {
+    // Canvas fills the entire viewport
+    const maxWidth = window.innerWidth;
+    const maxHeight = window.innerHeight;
+
+    // Set canvas internal resolution to match viewport
+    this.canvas.width = maxWidth;
+    this.canvas.height = maxHeight;
+
+    // Update CONFIG to match actual canvas size for game logic
+    (CONFIG as any).CANVAS_WIDTH = maxWidth;
+    (CONFIG as any).CANVAS_HEIGHT = maxHeight;
+    (CONFIG as any).FLOOR_Y = maxHeight - 50; // Keep floor near bottom
+    (CONFIG as any).CHARACTER_START_X = maxWidth * 0.15; // 15% from left edge
+
+    // Canvas style fills container (handled by CSS)
+    this.canvas.style.width = `${maxWidth}px`;
+    this.canvas.style.height = `${maxHeight}px`;
+  }
+
+  private setupTouchControls(): void {
+    this.canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      this.touchStartX = touch.clientX;
+      this.touchStartY = touch.clientY;
+      this.touchStartTime = Date.now();
+    });
+
+    this.canvas.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      if (!e.changedTouches[0]) return;
+
+      const touch = e.changedTouches[0];
+      const touchEndX = touch.clientX;
+      const touchEndY = touch.clientY;
+      const touchEndTime = Date.now();
+
+      const deltaX = touchEndX - this.touchStartX;
+      const deltaY = touchEndY - this.touchStartY;
+      const deltaTime = touchEndTime - this.touchStartTime;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      if (this.state === GameState.PLAYING) {
+        // Check for swipe right (bark)
+        if (
+          Math.abs(deltaX) > Math.abs(deltaY) &&
+          deltaX > this.swipeThreshold &&
+          deltaTime < 300
+        ) {
+          this.destroyBlock();
+          return;
+        }
+
+        // Check for tap/double tap (jump)
+        if (distance < 10 && deltaTime < 300) {
+          const currentTime = Date.now();
+          const timeSinceLastTap = currentTime - this.lastTapTime;
+
+          if (timeSinceLastTap < this.tapDelay && timeSinceLastTap > 0) {
+            // Double tap - double jump
+            if (this.characterY >= CONFIG.FLOOR_Y - CONFIG.CHARACTER_SIZE) {
+              // On ground: do normal jump first
+              this.jump();
+              // Then immediately trigger double jump on next frame
+              requestAnimationFrame(() => {
+                if (this.canDoubleJump && !this.hasDoubleJumped) {
+                  this.characterVelocityY = JUMP_STRENGTH;
+                  this.hasDoubleJumped = true;
+                  this.canDoubleJump = false;
+                }
+              });
+            } else if (this.canDoubleJump && !this.hasDoubleJumped) {
+              // Already in air, trigger double jump
+              this.characterVelocityY = JUMP_STRENGTH;
+              this.hasDoubleJumped = true;
+              this.canDoubleJump = false;
+            }
+          } else {
+            // Single tap - jump
+            this.jump();
+          }
+          this.lastTapTime = currentTime;
+        }
+      } else if (this.state === GameState.START) {
+        // Handle difficulty selection on start screen with swipe
+        if (
+          Math.abs(deltaX) > Math.abs(deltaY) &&
+          Math.abs(deltaX) > this.swipeThreshold &&
+          deltaTime < 300
+        ) {
+          if (deltaX > 0) {
+            // Swipe right - increase difficulty
+            changeDifficulty(this, 1);
+          } else {
+            // Swipe left - decrease difficulty
+            changeDifficulty(this, -1);
+          }
+        }
+      }
+    });
   }
 
   private startGame(): void {
     this.state = GameState.PLAYING;
     this.startScreen.classList.add("hidden");
+    this.instructions.classList.add("hidden");
     this.gameOverScreen.classList.add("hidden");
-    this.scoreDisplay.classList.remove("hidden");
-    this.livesDisplay.classList.remove("hidden");
+    this.topUIContainer.classList.remove("hidden");
     this.resetGame();
     this.updateLivesDisplay();
   }
@@ -188,8 +530,8 @@ class Game {
     this.state = GameState.START;
     this.gameOverScreen.classList.add("hidden");
     this.startScreen.classList.remove("hidden");
-    this.scoreDisplay.classList.add("hidden");
-    this.livesDisplay.classList.add("hidden");
+    this.instructions.classList.remove("hidden");
+    this.topUIContainer.classList.add("hidden");
     this.resetGame();
   }
 
@@ -202,9 +544,23 @@ class Game {
     this.floorOffset = 0;
     this.obstacles = [];
     this.obstacleTimer = 0;
+    this.trees = [];
+    this.treeSpawnCounter = 0;
+    this.nextTreeSpawnFrame =
+      CONFIG.TREE_SPAWN_MIN_FRAMES +
+      Math.floor(
+        Math.random() *
+          (CONFIG.TREE_SPAWN_MAX_FRAMES - CONFIG.TREE_SPAWN_MIN_FRAMES)
+      );
     this.canDoubleJump = false;
     this.hasDoubleJumped = false;
     this.isInCollision = false;
+    this.characterRotation = 0;
+    this.gameOverAnimationTime = 0;
+    this.shakeTime = 0;
+    this.shakeOffsetX = 0;
+    this.shakeOffsetY = 0;
+    this.isBarking = false;
     this.updateScore();
     this.updateLivesDisplay();
   }
@@ -244,16 +600,19 @@ class Game {
 
       if (obstacle.x > this.characterX && isOnScreen) {
         const distance = obstacle.x - this.characterX;
-        if (distance < minDistance && obstacle.blocks.length > 0) {
+        if (distance < minDistance && obstacle.blocks.length > 2) {
           minDistance = distance;
           nearestObstacle = obstacle;
         }
       }
     }
 
-    if (nearestObstacle && nearestObstacle.blocks.length > 0) {
-      // Remove the top block
+    if (nearestObstacle && nearestObstacle.blocks.length > 2) {
+      // Remove the top block (minimum 2 blocks required)
       nearestObstacle.blocks.pop();
+      // Start shake animation and switch to bark image
+      this.shakeTime = 0;
+      this.isBarking = true;
     }
   }
 
@@ -276,13 +635,56 @@ class Game {
   }
 
   private gameOver(): void {
+    // Start the animation instead of immediately showing game over screen
+    this.state = GameState.GAME_OVER_ANIMATING;
+    this.characterRotation = 0;
+    this.gameOverAnimationTime = 0;
+  }
+
+  private finishGameOver(): void {
+    // Called after animation completes or when quit is pressed
     this.state = GameState.GAME_OVER;
-    this.scoreDisplay.classList.add("hidden");
-    this.livesDisplay.classList.add("hidden");
+    this.topUIContainer.classList.add("hidden");
     this.gameOverScreen.classList.remove("hidden");
   }
 
   private update(): void {
+    if (this.state === GameState.GAME_OVER_ANIMATING) {
+      // Update animation
+      this.gameOverAnimationTime += 16; // Assume ~60fps (16ms per frame)
+      const progress = Math.min(
+        this.gameOverAnimationTime / this.gameOverAnimationDuration,
+        1
+      );
+      this.characterRotation = progress * 180; // Rotate from 0 to 180 degrees
+
+      if (progress >= 1) {
+        // Animation complete, show game over screen
+        this.finishGameOver();
+      }
+      return;
+    }
+
+    // Update shake animation
+    if (this.shakeTime >= 0 && this.shakeTime < this.shakeDuration) {
+      this.shakeTime += 16; // Assume ~60fps (16ms per frame)
+      const progress = this.shakeTime / this.shakeDuration;
+      const intensity = 1 - progress; // Decrease intensity over time
+      const shakeAmount = 5 * intensity; // Max shake of 5 pixels
+
+      // Generate random shake offset
+      this.shakeOffsetX = (Math.random() - 0.5) * 2 * shakeAmount;
+      this.shakeOffsetY = (Math.random() - 0.5) * 2 * shakeAmount;
+
+      if (progress >= 1) {
+        // Animation complete
+        this.shakeTime = -1; // Set to -1 to stop animation
+        this.shakeOffsetX = 0;
+        this.shakeOffsetY = 0;
+        this.isBarking = false; // Switch back to normal image
+      }
+    }
+
     if (this.state !== GameState.PLAYING) return;
 
     // Update floor
@@ -307,10 +709,16 @@ class Game {
       this.obstacleSpacing = Math.round(
         CONFIG.OBSTACLE_SPACING * (0.5 + 1.0 * Math.random())
       );
-      console.log(this.obstacleSpacing);
-      const blockCount = Math.floor(Math.random() * 10) + 1; // 1-10 blocks
+      // Track spacing history (keep last 3 values)
+      this.obstacleSpacingHistory.push(this.obstacleSpacing);
+      if (this.obstacleSpacingHistory.length > 3) {
+        this.obstacleSpacingHistory.shift(); // Remove oldest value
+      }
+      const blockCount = Math.floor(Math.random() * 9) + 2; // 2-10 blocks (minimum 2)
+      const { image: randomImage, path: imagePath } =
+        this.getRandomObstacleImage();
       this.obstacles.push(
-        new Obstacle(CONFIG.CANVAS_WIDTH, blockCount, this.obstacleImage)
+        new Obstacle(CONFIG.CANVAS_WIDTH, blockCount, randomImage, imagePath)
       );
     }
 
@@ -327,6 +735,58 @@ class Game {
     if (this.isInCollision && !currentlyColliding) {
       this.isInCollision = false;
     }
+
+    // Spawn trees randomly (with spacing to avoid overlap)
+    this.treeSpawnCounter++;
+    if (this.treeSpawnCounter >= this.nextTreeSpawnFrame) {
+      const randomTreeImage = this.getRandomTreeImage();
+      if (randomTreeImage) {
+        // Check if there's enough space from the last tree
+        let canSpawn = true;
+        if (this.trees.length > 0) {
+          const lastTree = this.trees[this.trees.length - 1];
+          const minDistance = CONFIG.CANVAS_WIDTH * 0.5; // Minimum distance between trees
+          if (CONFIG.CANVAS_WIDTH - lastTree.x < minDistance) {
+            canSpawn = false;
+          }
+        }
+
+        if (canSpawn) {
+          this.trees.push(new Tree(CONFIG.CANVAS_WIDTH, randomTreeImage));
+          // Set next spawn frame randomly
+          this.nextTreeSpawnFrame =
+            CONFIG.TREE_SPAWN_MIN_FRAMES +
+            Math.floor(
+              Math.random() *
+                (CONFIG.TREE_SPAWN_MAX_FRAMES - CONFIG.TREE_SPAWN_MIN_FRAMES)
+            );
+          this.treeSpawnCounter = 0;
+        }
+      } else {
+        // If no image available, still reset counter to try again
+        this.nextTreeSpawnFrame =
+          CONFIG.TREE_SPAWN_MIN_FRAMES +
+          Math.floor(
+            Math.random() *
+              (CONFIG.TREE_SPAWN_MAX_FRAMES - CONFIG.TREE_SPAWN_MIN_FRAMES)
+          );
+        this.treeSpawnCounter = 0;
+      }
+    }
+
+    // Move trees (slower than obstacles for parallax)
+    for (let i = this.trees.length - 1; i >= 0; i--) {
+      const tree = this.trees[i];
+      tree.x -= CONFIG.TREE_SPEED;
+
+      // Remove trees that are off screen
+      if (tree.x + tree.width < 0) {
+        this.trees.splice(i, 1);
+      }
+    }
+
+    // Cache current time once per frame instead of calling Date.now() multiple times
+    const currentTime = Date.now();
 
     // Move obstacles
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
@@ -345,10 +805,27 @@ class Game {
         this.isInCollision = true;
         this.lives--;
         this.updateLivesDisplay();
+        // Swap obstacle image to mad version
+        this.makeObstacleMad(obstacle);
         if (this.lives <= 0) {
           this.gameOver();
           return;
         }
+      }
+
+      // Update mad obstacle timers (use cached time)
+      if (obstacle.madUntil && currentTime >= obstacle.madUntil) {
+        obstacle.restoreOriginalImage();
+      }
+    }
+  }
+
+  private makeObstacleMad(obstacle: Obstacle): void {
+    if (obstacle.originalImagePath && obstacle.originalImage) {
+      const madImage = this.madObstacleImages.get(obstacle.originalImagePath);
+      if (madImage) {
+        obstacle.image = madImage;
+        obstacle.madUntil = Date.now() + 2000; // 2 seconds from now
       }
     }
   }
@@ -390,16 +867,24 @@ class Game {
     // Clear canvas
     this.ctx.clearRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
 
-    if (this.state === GameState.PLAYING) {
+    if (
+      this.state === GameState.PLAYING ||
+      this.state === GameState.GAME_OVER_ANIMATING
+    ) {
       // Draw floor
       this.drawFloor();
+
+      // Draw trees (behind obstacles for parallax effect)
+      for (const tree of this.trees) {
+        this.drawTree(tree);
+      }
 
       // Draw obstacles
       for (const obstacle of this.obstacles) {
         this.drawObstacle(obstacle);
       }
 
-      // Draw character
+      // Draw character (also during animation)
       this.drawCharacter();
 
       // Draw collision debug visuals if debug mode is enabled
@@ -409,8 +894,22 @@ class Game {
     }
   }
 
+  private drawTree(tree: Tree): void {
+    if (tree.image) {
+      // Use stored height and width (calculated once when tree is created)
+      // Draw tree aligned to floor
+      this.ctx.drawImage(
+        tree.image,
+        tree.x,
+        CONFIG.FLOOR_Y - tree.height,
+        tree.width,
+        tree.height
+      );
+    }
+  }
+
   private drawFloor(): void {
-    this.ctx.fillStyle = "#f8f8f2";
+    this.ctx.fillStyle = "#f5f5dc"; // Beige cream
     this.ctx.fillRect(
       0,
       CONFIG.FLOOR_Y,
@@ -489,6 +988,20 @@ class Game {
   }
 
   private drawCollisionDebug(): void {
+    // Draw moving average of obstacle spacing
+    if (this.obstacleSpacingHistory.length > 0) {
+      const movingAverage =
+        this.obstacleSpacingHistory.reduce((a, b) => a + b, 0) /
+        this.obstacleSpacingHistory.length;
+      this.ctx.fillStyle = "#000000";
+      this.ctx.font = "16px Tiny5";
+      this.ctx.fillText(
+        `Obstacle Spacing MA (3): ${movingAverage.toFixed(1)}`,
+        10,
+        30
+      );
+    }
+
     // Draw character collision box
     this.ctx.strokeStyle = "#00FF00";
     this.ctx.lineWidth = 2;
@@ -514,7 +1027,13 @@ class Game {
       // Calculate obstacle bounds
       const obstacleLeft = obstacle.x;
       const obstacleRight = obstacle.x + obstacleWidth;
-      const obstacleTop = Math.min(...obstacle.blocks.map((block) => block.y));
+      // Optimize: find min without spread operator
+      let obstacleTop = obstacle.blocks[0]?.y ?? 0;
+      for (let i = 1; i < obstacle.blocks.length; i++) {
+        if (obstacle.blocks[i].y < obstacleTop) {
+          obstacleTop = obstacle.blocks[i].y;
+        }
+      }
       const obstacleBottom = obstacleTop + obstacleHeight;
 
       // Check if currently colliding
@@ -583,10 +1102,39 @@ class Game {
   }
 
   private drawCharacter(): void {
-    if (this.characterImage) {
+    // Use bark image if barking, otherwise use normal image
+    const currentImage =
+      this.isBarking && this.characterBarkImage
+        ? this.characterBarkImage
+        : this.characterImage;
+
+    // Calculate character center for rotation
+    const imageHeight = 80;
+    const imageAspectRatio = currentImage
+      ? currentImage.width / currentImage.height
+      : 1;
+    const imageWidth = imageHeight * imageAspectRatio;
+    const centerX = this.characterX + CONFIG.CHARACTER_SIZE / 2;
+    const centerY = this.characterY + CONFIG.CHARACTER_SIZE / 2;
+
+    // Apply rotation if animating
+    if (
+      this.state === GameState.GAME_OVER_ANIMATING &&
+      this.characterRotation > 0
+    ) {
+      this.ctx.save();
+      this.ctx.translate(centerX, centerY);
+      this.ctx.rotate((this.characterRotation * Math.PI) / 180);
+      this.ctx.translate(-centerX, -centerY);
+    }
+
+    // Apply shake offset to drawing position
+    const drawX = this.characterX + this.shakeOffsetX;
+    const drawY = this.characterY + this.shakeOffsetY;
+
+    if (currentImage) {
       // Calculate aspect ratio to maintain proportions
-      const imageAspectRatio =
-        this.characterImage.width / this.characterImage.height;
+      const imageAspectRatio = currentImage.width / currentImage.height;
       const imageHeight = 80; // Same height as green square
       const imageWidth = imageHeight * imageAspectRatio; // Maintain aspect ratio
 
@@ -595,9 +1143,9 @@ class Game {
       // Image bottom will be at characterY + imageHeight, which equals characterY + CHARACTER_SIZE
 
       this.ctx.drawImage(
-        this.characterImage,
-        this.characterX,
-        this.characterY - imageHeight / 2,
+        currentImage,
+        drawX,
+        drawY - imageHeight / 2,
         imageWidth,
         imageHeight
       );
@@ -605,19 +1153,27 @@ class Game {
       // Fallback: draw a rectangle
       this.ctx.fillStyle = "#00FF00";
       this.ctx.fillRect(
-        this.characterX,
-        this.characterY,
+        drawX,
+        drawY,
         CONFIG.CHARACTER_SIZE,
         CONFIG.CHARACTER_SIZE
       );
       this.ctx.strokeStyle = "#000";
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(
-        this.characterX,
-        this.characterY,
+        drawX,
+        drawY,
         CONFIG.CHARACTER_SIZE,
         CONFIG.CHARACTER_SIZE
       );
+    }
+
+    // Restore transformation if rotation was applied
+    if (
+      this.state === GameState.GAME_OVER_ANIMATING &&
+      this.characterRotation > 0
+    ) {
+      this.ctx.restore();
     }
   }
 
@@ -626,21 +1182,111 @@ class Game {
     this.draw();
     requestAnimationFrame(() => this.gameLoop());
   }
+
+  private loadMusicPreference(): void {
+    const savedMusicState = localStorage.getItem("musicOn");
+    if (savedMusicState !== null) {
+      this.isMusicOn = savedMusicState === "true";
+    } else {
+      this.isMusicOn = false; // Default to off
+      localStorage.setItem("musicOn", "false");
+    }
+    this.updateMusicDisplay();
+  }
+
+  private initializeBackgroundMusic(): void {
+    this.backgroundMusic = new Audio("/assets/Bark Them All Away.mp3");
+    this.backgroundMusic.loop = true;
+    this.backgroundMusic.volume = 0.5; // Set volume to 50%
+
+    // Handle autoplay restrictions
+    this.backgroundMusic.addEventListener("error", (e) => {
+      console.warn("Failed to load background music:", e);
+    });
+
+    // Ensure music loops by restarting if it ends (fallback if loop property doesn't work)
+    this.backgroundMusic.addEventListener("ended", () => {
+      if (this.isMusicOn && this.backgroundMusic) {
+        this.backgroundMusic.currentTime = 0;
+        this.backgroundMusic.play().catch((error) => {
+          console.warn("Failed to restart background music:", error);
+        });
+      }
+    });
+
+    // Start playing if music is on
+    if (this.isMusicOn) {
+      this.playBackgroundMusic();
+    }
+  }
+
+  private playBackgroundMusic(): void {
+    if (this.backgroundMusic && this.isMusicOn) {
+      this.backgroundMusic.play().catch((error) => {
+        console.warn("Failed to play background music:", error);
+        // Some browsers require user interaction before autoplay
+      });
+    }
+  }
+
+  private stopBackgroundMusic(): void {
+    if (this.backgroundMusic) {
+      this.backgroundMusic.pause();
+      this.backgroundMusic.currentTime = 0;
+    }
+  }
+
+  private toggleMusic(on: boolean): void {
+    this.isMusicOn = on;
+    localStorage.setItem("musicOn", on.toString());
+    this.updateMusicDisplay();
+
+    if (this.isMusicOn) {
+      this.playBackgroundMusic();
+    } else {
+      this.stopBackgroundMusic();
+    }
+  }
+
+  private updateMusicDisplay(): void {
+    if (this.musicText) {
+      this.musicText.textContent = `music ${this.isMusicOn ? "on" : "off"}`;
+    }
+  }
+
+  private updateMenuSelection(): void {
+    // Update visual selection indicators
+    if (this.difficultySelector && this.musicSelector) {
+      if (this.selectedMenuOption === "difficulty") {
+        this.difficultySelector.classList.add("selected");
+        this.musicSelector.classList.remove("selected");
+      } else {
+        this.difficultySelector.classList.remove("selected");
+        this.musicSelector.classList.add("selected");
+      }
+    }
+  }
 }
 
 class Obstacle {
   x: number;
   blocks: { y: number }[];
   image: HTMLImageElement | null;
+  originalImage: HTMLImageElement | null;
+  originalImagePath: string | null = null; // Store path to original image for mad image lookup
+  madUntil: number | null = null; // Timestamp when to restore original image
 
   constructor(
     startX: number,
     blockCount: number,
-    image: HTMLImageElement | null = null
+    image: HTMLImageElement | null = null,
+    imagePath: string | null = null
   ) {
     this.x = startX;
     this.blocks = [];
     this.image = image;
+    this.originalImage = image; // Store original image
+    this.originalImagePath = imagePath; // Store path for mad image lookup
 
     // Create blocks stacked from bottom to top
     for (let i = 0; i < blockCount; i++) {
@@ -648,6 +1294,33 @@ class Obstacle {
         y: CONFIG.FLOOR_Y - CONFIG.BLOCK_SIZE - i * CONFIG.BLOCK_SIZE,
       });
     }
+  }
+
+  restoreOriginalImage(): void {
+    this.image = this.originalImage;
+    this.madUntil = null;
+  }
+}
+
+class Tree {
+  x: number;
+  image: HTMLImageElement;
+  width: number;
+  height: number;
+
+  constructor(startX: number, image: HTMLImageElement) {
+    this.x = startX;
+    this.image = image;
+
+    // Calculate tree height once when created (8-10 blocks: 320-400px)
+    // Randomize height for variety
+    const heightVariation = Math.random();
+    this.height =
+      CONFIG.TREE_MIN_HEIGHT +
+      (CONFIG.TREE_MAX_HEIGHT - CONFIG.TREE_MIN_HEIGHT) * heightVariation;
+
+    // Calculate width maintaining aspect ratio
+    this.width = (image.width / image.height) * this.height;
   }
 }
 
