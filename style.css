@@ -1,0 +1,138 @@
+@font-face {
+    font-family: 'Tiny5';
+    src: url('fonts/Tiny5-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Tiny5', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
+    background: #000000;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#gameCanvas {
+    border: 3px solid #333;
+    background: #f8f8f2;
+
+    display: block;
+}
+
+.screen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    /* background: rgba(0, 0, 0, 0.8); */
+    color: black;
+    padding: 40px 60px;
+    border-radius: 10px;
+    z-index: 10;
+    min-width: 500px;
+}
+
+.screen.hidden {
+    display: none;
+}
+
+#start-screen-image {
+    width: 200px;
+    height: auto;
+    margin-bottom: 20px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.screen h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.screen p {
+    font-size: 24px;
+    margin: 10px 0;
+}
+
+#score-display {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-size: 24px;
+    color: white;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 5;
+}
+
+#score-display.hidden {
+    display: none;
+}
+
+#lives-display {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 5;
+}
+
+#lives-display.hidden {
+    display: none;
+}
+
+#lives-display img {
+    width: 30px;
+    height: 30px;
+}
+
+.button-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.game-button {
+    font-family: 'Tiny5', monospace;
+    font-size: 20px;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid #ffffff;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.game-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.game-button:active {
+    transform: scale(0.95);
+}
+
