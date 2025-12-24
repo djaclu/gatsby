@@ -91,6 +91,7 @@ export class Game {
   private shakeDuration: number = 2000; // Shake animation duration in milliseconds
   private shakeOffsetX: number = 0; // Current shake offset in X direction
   private shakeOffsetY: number = 0; // Current shake offset in Y direction
+  private lastFrameTime: number = 0; // Track last frame time for delta time calculation
 
   // Floor
   private floorOffset: number = 0;
@@ -536,6 +537,7 @@ export class Game {
   }
 
   private resetGame(): void {
+    this.lastFrameTime = 0; // Reset frame time tracking
     this.score = 0;
     this.lives = 3;
     this.characterX = CONFIG.CHARACTER_START_X;
@@ -648,10 +650,10 @@ export class Game {
     this.gameOverScreen.classList.remove("hidden");
   }
 
-  private update(): void {
+  private update(deltaTime: number): void {
     if (this.state === GameState.GAME_OVER_ANIMATING) {
-      // Update animation
-      this.gameOverAnimationTime += 16; // Assume ~60fps (16ms per frame)
+      // Update animation using actual delta time
+      this.gameOverAnimationTime += deltaTime;
       const progress = Math.min(
         this.gameOverAnimationTime / this.gameOverAnimationDuration,
         1
@@ -665,9 +667,9 @@ export class Game {
       return;
     }
 
-    // Update shake animation
+    // Update shake animation using actual delta time
     if (this.shakeTime >= 0 && this.shakeTime < this.shakeDuration) {
-      this.shakeTime += 16; // Assume ~60fps (16ms per frame)
+      this.shakeTime += deltaTime;
       const progress = this.shakeTime / this.shakeDuration;
       const intensity = 1 - progress; // Decrease intensity over time
       const shakeAmount = 5 * intensity; // Max shake of 5 pixels
@@ -1178,7 +1180,12 @@ export class Game {
   }
 
   private gameLoop(): void {
-    this.update();
+    const currentTime = performance.now();
+    const deltaTime =
+      this.lastFrameTime > 0 ? currentTime - this.lastFrameTime : 16; // Default to 16ms for first frame
+    this.lastFrameTime = currentTime;
+
+    this.update(deltaTime);
     this.draw();
     requestAnimationFrame(() => this.gameLoop());
   }
