@@ -120,15 +120,26 @@ export default async function handler(
         throw new Error(`Upstash API error: ${response.status} ${errorText}`);
       }
 
-      leaderboard = await response.json();
-      console.log(
-        "Redis response type:",
-        typeof leaderboard,
-        Array.isArray(leaderboard)
-          ? `array[${leaderboard.length}]`
-          : "not array",
-        leaderboard
-      );
+      const responseText = await response.text();
+      console.log("Raw Redis REST API response:", responseText);
+
+      try {
+        leaderboard = JSON.parse(responseText);
+        console.log(
+          "Parsed Redis response type:",
+          typeof leaderboard,
+          Array.isArray(leaderboard)
+            ? `array[${leaderboard.length}]`
+            : "not array",
+          "Value:",
+          leaderboard
+        );
+      } catch (parseError) {
+        console.error("Failed to parse response as JSON:", parseError);
+        console.log("Response text:", responseText);
+        // Try to handle as string or number
+        leaderboard = responseText;
+      }
     } catch (redisError) {
       console.error("Redis zrevrange error:", redisError);
       // If the key doesn't exist, return empty array

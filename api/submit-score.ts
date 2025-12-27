@@ -188,8 +188,47 @@ export default async function handler(
           throw new Error(`Upstash API error: ${response.status} ${errorText}`);
         }
 
-        const result = await response.json();
-        console.log("ZADD successful via REST API:", result);
+        const resultText = await response.text();
+        console.log(
+          "ZADD REST API raw response:",
+          resultText,
+          "Status:",
+          response.status
+        );
+        let result;
+        try {
+          result = JSON.parse(resultText);
+          console.log("ZADD successful via REST API, parsed result:", result);
+        } catch (parseError) {
+          console.log(
+            "ZADD response is not JSON, treating as success:",
+            resultText
+          );
+          result = resultText;
+        }
+
+        // Verify the score was actually added by checking it immediately
+        try {
+          const verifyResponse = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(["ZSCORE", "leaderboard", username]),
+          });
+          if (verifyResponse.ok) {
+            const verifyResult = await verifyResponse.text();
+            console.log(
+              "Verification - ZSCORE result for",
+              username,
+              ":",
+              verifyResult
+            );
+          }
+        } catch (verifyError) {
+          console.error("Failed to verify score was added:", verifyError);
+        }
       } catch (restError) {
         console.error("REST API call failed:", restError);
         // Fallback to library method if REST API fails
