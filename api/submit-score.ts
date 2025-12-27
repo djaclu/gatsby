@@ -2,10 +2,19 @@ import { Redis } from "@upstash/redis";
 
 // Initialize Redis - reads from environment variables automatically
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
+function getRedisClient() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    throw new Error("Redis environment variables not set");
+  }
+  
+  return new Redis({
+    url,
+    token,
+  });
+}
 
 interface SubmitScoreRequest {
   username: string;
@@ -36,6 +45,28 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    // Initialize Redis client
+    let redis;
+    try {
+      redis = getRedisClient();
+    } catch (initError) {
+      console.error("Failed to initialize Redis:", initError);
+      return new Response(
+        JSON.stringify({ 
+          error: "Redis configuration error",
+          details: initError instanceof Error ? initError.message : String(initError),
+          success: false
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+
     const body: SubmitScoreRequest = await req.json();
 
     // Validate input
