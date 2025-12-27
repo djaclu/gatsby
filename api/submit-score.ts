@@ -119,19 +119,38 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Check if user already exists
-    const existingScore = await redis.zScore("leaderboard", username);
+    const redisAny = redis as any;
+    let existingScore: number | null = null;
+    if (typeof redisAny.zscore === 'function') {
+      existingScore = await redisAny.zscore("leaderboard", username);
+    } else if (typeof redisAny.zScore === 'function') {
+      existingScore = await redisAny.zScore("leaderboard", username);
+    } else {
+      const result = await redisAny.sendCommand(["ZSCORE", "leaderboard", username]);
+      existingScore = result ? Number(result) : null;
+    }
 
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
-      // ZADD adds the member with the score, or updates if it exists
-      await redis.zAdd("leaderboard", {
-        score: body.score,
-        member: username,
-      });
+      if (typeof redisAny.zadd === 'function') {
+        await redisAny.zadd("leaderboard", body.score, username);
+      } else if (typeof redisAny.zAdd === 'function') {
+        await redisAny.zAdd("leaderboard", { score: body.score, member: username });
+      } else {
+        await redisAny.sendCommand(["ZADD", "leaderboard", body.score.toString(), username]);
+      }
 
       // Get the new rank (position) of the user (0-indexed, descending order)
-      const rank = await redis.zRank("leaderboard", username, { rev: true });
+      let rank: number | null = null;
+      if (typeof redisAny.zrevrank === 'function') {
+        rank = await redisAny.zrevrank("leaderboard", username);
+      } else if (typeof redisAny.zRank === 'function') {
+        rank = await redisAny.zRank("leaderboard", username, { rev: true });
+      } else {
+        const result = await redisAny.sendCommand(["ZREVRANK", "leaderboard", username]);
+        rank = result !== null ? Number(result) : null;
+      }
 
       return new Response(
         JSON.stringify({
@@ -151,7 +170,15 @@ export default async function handler(req: Request): Promise<Response> {
       );
     } else {
       // Score is not higher, return existing score info
-      const rank = await redis.zRank("leaderboard", username, { rev: true });
+      let rank: number | null = null;
+      if (typeof redisAny.zrevrank === 'function') {
+        rank = await redisAny.zrevrank("leaderboard", username);
+      } else if (typeof redisAny.zRank === 'function') {
+        rank = await redisAny.zRank("leaderboard", username, { rev: true });
+      } else {
+        const result = await redisAny.sendCommand(["ZREVRANK", "leaderboard", username]);
+        rank = result !== null ? Number(result) : null;
+      }
       return new Response(
         JSON.stringify({
           success: false,

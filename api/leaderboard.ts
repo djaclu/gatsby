@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import type { Redis as RedisType } from "@upstash/redis";
 
 // Initialize Redis - reads from environment variables automatically
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
@@ -74,10 +75,17 @@ export default async function handler(req: Request): Promise<Response> {
     // Use zRange with REV option to get scores in descending order
     let leaderboard: any;
     try {
-      leaderboard = await redis.zRange("leaderboard", 0, 24, {
-        rev: true,
-        withScores: true,
-      });
+      // Get top 25 scores in reverse order (descending) with scores
+      // @upstash/redis v1.36.0 uses zrange with REV option
+      const redisAny = redis as any;
+      if (typeof redisAny.zrange === 'function') {
+        leaderboard = await redisAny.zrange("leaderboard", 0, 24, "REV", "WITHSCORES");
+      } else if (typeof redisAny.zRange === 'function') {
+        leaderboard = await redisAny.zRange("leaderboard", 0, 24, { rev: true, withScores: true });
+      } else {
+        // Fallback: use command method if available
+        leaderboard = await redisAny.sendCommand(["ZREVRANGE", "leaderboard", "0", "24", "WITHSCORES"]);
+      }
       console.log("Redis response type:", typeof leaderboard, Array.isArray(leaderboard) ? `array[${leaderboard.length}]` : "not array");
     } catch (redisError) {
       console.error("Redis zrevrange error:", redisError);
