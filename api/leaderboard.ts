@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { IncomingMessage, ServerResponse } from "http";
 
 // Initialize Redis - reads from environment variables automatically
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
@@ -23,27 +24,31 @@ interface LeaderboardEntry {
   position: number;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  // Handle CORS
+// Helper function to set CORS headers
+function setCorsHeaders(res: ServerResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+) {
+  setCorsHeaders(res);
+
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
+    res.statusCode = 200;
+    res.end();
+    return;
   }
 
   if (req.method !== "GET") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    res.statusCode = 405;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ error: "Method not allowed" }));
+    return;
   }
 
   try {
@@ -53,21 +58,17 @@ export default async function handler(req: Request): Promise<Response> {
       redis = getRedisClient();
     } catch (initError) {
       console.error("Failed to initialize Redis:", initError);
-      return new Response(
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           error: "Redis configuration error",
           details:
             initError instanceof Error ? initError.message : String(initError),
           entries: [],
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
 
     console.log("Fetching leaderboard from Redis...");
@@ -118,13 +119,10 @@ export default async function handler(req: Request): Promise<Response> {
           redisError.message.includes("not found"))
       ) {
         console.log("Leaderboard key doesn't exist yet, returning empty");
-        return new Response(JSON.stringify({ entries: [] }), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        });
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ entries: [] }));
+        return;
       }
       throw redisError;
     }
@@ -163,13 +161,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     console.log(`Returning ${entries.length} entries`);
 
-    return new Response(JSON.stringify({ entries }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ entries }));
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -184,19 +178,14 @@ export default async function handler(req: Request): Promise<Response> {
       },
     });
 
-    return new Response(
+    res.statusCode = 500;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
       JSON.stringify({
         error: "Failed to fetch leaderboard",
         details: errorMessage,
         entries: [],
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
+      })
     );
   }
 }

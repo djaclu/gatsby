@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { IncomingMessage, ServerResponse } from "http";
 
 // Initialize Redis - reads from environment variables automatically
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
@@ -22,27 +23,49 @@ interface SubmitScoreRequest {
   score: number;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  // Handle CORS
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
+// Helper function to read request body
+function readBody(req: IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
     });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+// Helper function to set CORS headers
+function setCorsHeaders(res: ServerResponse) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+) {
+  setCorsHeaders(res);
+
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.statusCode = 200;
+    res.end();
+    return;
   }
 
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    res.statusCode = 405;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ error: "Method not allowed" }));
+    return;
   }
 
   try {
@@ -52,37 +75,29 @@ export default async function handler(req: Request): Promise<Response> {
       redis = getRedisClient();
     } catch (initError) {
       console.error("Failed to initialize Redis:", initError);
-      return new Response(
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           error: "Redis configuration error",
           details:
             initError instanceof Error ? initError.message : String(initError),
           success: false,
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
 
-    const body: SubmitScoreRequest = await req.json();
+    const body: SubmitScoreRequest = await readBody(req);
 
     // Validate input
     if (!body.username || typeof body.username !== "string") {
-      return new Response(
-        JSON.stringify({ error: "Username is required and must be a string" }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
+        JSON.stringify({ error: "Username is required and must be a string" })
       );
+      return;
     }
 
     if (
@@ -90,18 +105,14 @@ export default async function handler(req: Request): Promise<Response> {
       body.score < 0 ||
       !Number.isInteger(body.score)
     ) {
-      return new Response(
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           error: "Score must be a non-negative integer",
-        }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
 
     // Sanitize username (limit length, remove special characters)
@@ -111,16 +122,10 @@ export default async function handler(req: Request): Promise<Response> {
       .replace(/[^a-zA-Z0-9_-]/g, "");
 
     if (username.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Invalid username format" }),
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "Invalid username format" }));
+      return;
     }
 
     // Check if user already exists
@@ -173,22 +178,18 @@ export default async function handler(req: Request): Promise<Response> {
         rank = result !== null ? Number(result) : null;
       }
 
-      return new Response(
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           success: true,
           message: existingScore === null ? "Score added" : "Score updated",
           username,
           score: body.score,
           position: rank !== null ? rank + 1 : null, // rank is 0-indexed
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     } else {
       // Score is not higher, return existing score info
       let rank: number | null = null;
@@ -204,7 +205,9 @@ export default async function handler(req: Request): Promise<Response> {
         ]);
         rank = result !== null ? Number(result) : null;
       }
-      return new Response(
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           success: false,
           message: "Score not higher than existing score",
@@ -212,15 +215,9 @@ export default async function handler(req: Request): Promise<Response> {
           currentScore: existingScore,
           submittedScore: body.score,
           position: rank !== null ? rank + 1 : null,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
   } catch (error) {
     console.error("Error submitting score:", error);
@@ -234,20 +231,16 @@ export default async function handler(req: Request): Promise<Response> {
       process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
     if (!redisUrl || !redisToken) {
-      return new Response(
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           error:
             "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
           success: false,
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
 
     // Check if it's a Redis connection error
@@ -256,36 +249,27 @@ export default async function handler(req: Request): Promise<Response> {
       errorMessage.includes("Redis") ||
       errorMessage.includes("connection")
     ) {
-      return new Response(
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(
         JSON.stringify({
           error:
             "Database connection failed. Please check your Redis configuration.",
           details: errorMessage,
           success: false,
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
+        })
       );
+      return;
     }
 
-    return new Response(
+    res.statusCode = 500;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
       JSON.stringify({
         error: errorMessage,
         type: "server_error",
         success: false,
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
+      })
     );
   }
 }
