@@ -74,41 +74,60 @@ export default async function handler(
     console.log("Fetching leaderboard from Redis...");
 
     // Get top 25 scores from Redis sorted set (sorted by score descending)
-    // Use zRange with REV option to get scores in descending order
+    // Use Upstash REST API directly to ensure consistency with submit-score
+    const url =
+      process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const token =
+      process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (!url || !token) {
+      throw new Error("Redis REST API credentials not found");
+    }
+
     let leaderboard: any;
     try {
-      // Get top 25 scores in reverse order (descending) with scores
-      // @upstash/redis v1.36.0 uses zrange with REV option
-      const redisAny = redis as any;
-      if (typeof redisAny.zrange === "function") {
-        leaderboard = await redisAny.zrange(
-          "leaderboard",
-          0,
-          24,
-          "REV",
-          "WITHSCORES"
-        );
-      } else if (typeof redisAny.zRange === "function") {
-        leaderboard = await redisAny.zRange("leaderboard", 0, 24, {
-          rev: true,
-          withScores: true,
-        });
-      } else {
-        // Fallback: use command method if available
-        leaderboard = await redisAny.sendCommand([
+      // Use REST API directly: ZREVRANGE leaderboard 0 24 WITHSCORES
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify([
           "ZREVRANGE",
           "leaderboard",
           "0",
           "24",
           "WITHSCORES",
-        ]);
+        ]),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Upstash REST API error:", response.status, errorText);
+        // If key doesn't exist, return empty array
+        if (
+          response.status === 404 ||
+          errorText.includes("key") ||
+          errorText.includes("not found")
+        ) {
+          console.log("Leaderboard key doesn't exist yet, returning empty");
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ entries: [] }));
+          return;
+        }
+        throw new Error(`Upstash API error: ${response.status} ${errorText}`);
       }
+
+      leaderboard = await response.json();
       console.log(
         "Redis response type:",
         typeof leaderboard,
         Array.isArray(leaderboard)
           ? `array[${leaderboard.length}]`
-          : "not array"
+          : "not array",
+        leaderboard
       );
     } catch (redisError) {
       console.error("Redis zrevrange error:", redisError);
@@ -116,7 +135,8 @@ export default async function handler(
       if (
         redisError instanceof Error &&
         (redisError.message.includes("key") ||
-          redisError.message.includes("not found"))
+          redisError.message.includes("not found") ||
+          redisError.message.includes("404"))
       ) {
         console.log("Leaderboard key doesn't exist yet, returning empty");
         res.statusCode = 200;
