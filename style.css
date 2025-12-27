@@ -494,6 +494,7 @@ body {
 
     #leaderboard-table {
         font-size: 12px;
+        color: #ff0000;
     }
 
     #leaderboard-table th {

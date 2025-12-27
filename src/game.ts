@@ -133,7 +133,7 @@ export class Game {
   private selectedMenuOption: "difficulty" | "music" = "difficulty";
   private leaderboardEntries: { username: string; score: number }[] = [];
   private leaderboardScrollInterval: number | null = null;
-  private currentLeaderboardRange: number = 0; // 0 = 1-10, 1 = 11-20, 2 = 21-25
+  private currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
   private username: string = ""; // Store username for score submission
 
   constructor() {
@@ -569,7 +569,10 @@ export class Game {
     this.refreshLeaderboard().then(() => {
       this.currentLeaderboardRange = 0;
       this.displayLeaderboardRange(0);
-      this.startLeaderboardAutoScroll();
+      // Only autoscroll if there are more than 10 entries
+      if (this.leaderboardEntries.length > 10) {
+        this.startLeaderboardAutoScroll();
+      }
     });
   }
 
@@ -769,8 +772,8 @@ export class Game {
     this.currentLeaderboardRange = 0;
     this.displayLeaderboardRange(0);
 
-    // Start auto-scrolling (only if we have entries)
-    if (this.leaderboardEntries.length > 0) {
+    // Start auto-scrolling (only if we have more than 10 entries)
+    if (this.leaderboardEntries.length > 10) {
       this.startLeaderboardAutoScroll();
     }
   }
@@ -808,20 +811,13 @@ export class Game {
       return;
     }
 
-    // Define ranges: 0 = 1-10, 1 = 11-20, 2 = 21-25
-    let startIndex: number;
-    let endIndex: number;
-
-    if (range === 0) {
-      startIndex = 0;
-      endIndex = Math.min(10, this.leaderboardEntries.length);
-    } else if (range === 1) {
-      startIndex = 10;
-      endIndex = Math.min(20, this.leaderboardEntries.length);
-    } else {
-      startIndex = 20;
-      endIndex = Math.min(25, this.leaderboardEntries.length);
-    }
+    // Show 10 scores per scroll
+    const scoresPerPage = 10;
+    const startIndex = range * scoresPerPage;
+    const endIndex = Math.min(
+      startIndex + scoresPerPage,
+      this.leaderboardEntries.length
+    );
 
     // Get entries for this range
     const entriesToShow = this.leaderboardEntries.slice(startIndex, endIndex);
@@ -851,15 +847,27 @@ export class Game {
   }
 
   private startLeaderboardAutoScroll(): void {
+    // Only autoscroll if there are more than 10 scores
+    if (this.leaderboardEntries.length <= 10) {
+      return;
+    }
+
     // Clear any existing interval
     if (this.leaderboardScrollInterval !== null) {
       clearInterval(this.leaderboardScrollInterval);
     }
 
+    // Calculate number of pages (each page shows 10 scores)
+    const scoresPerPage = 10;
+    const totalPages = Math.ceil(
+      this.leaderboardEntries.length / scoresPerPage
+    );
+
     // Auto-scroll every 3 seconds
     this.leaderboardScrollInterval = window.setInterval(() => {
       // Cycle through ranges: 0 -> 1 -> 2 -> 0
-      this.currentLeaderboardRange = (this.currentLeaderboardRange + 1) % 3;
+      this.currentLeaderboardRange =
+        (this.currentLeaderboardRange + 1) % totalPages;
       this.displayLeaderboardRange(this.currentLeaderboardRange);
     }, 3000);
   }
@@ -1058,8 +1066,8 @@ export class Game {
           this.currentLeaderboardRange = 0;
           this.displayLeaderboardRange(0);
 
-          // Restart auto-scroll if we have entries
-          if (this.leaderboardEntries.length > 0) {
+          // Restart auto-scroll if we have more than 10 entries
+          if (this.leaderboardEntries.length > 10) {
             this.startLeaderboardAutoScroll();
           }
         }
