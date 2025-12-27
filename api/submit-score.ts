@@ -147,20 +147,41 @@ export default async function handler(
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
-      if (typeof redisAny.zadd === "function") {
-        await redisAny.zadd("leaderboard", body.score, username);
-      } else if (typeof redisAny.zAdd === "function") {
-        await redisAny.zAdd("leaderboard", {
-          score: body.score,
-          member: username,
-        });
-      } else {
+      // Use raw Redis command which is most reliable
+      try {
         await redisAny.sendCommand([
           "ZADD",
           "leaderboard",
           body.score.toString(),
           username,
         ]);
+      } catch (zaddError) {
+        console.error("ZADD command error:", zaddError);
+        // Try alternative formats as fallback
+        if (typeof redisAny.zAdd === "function") {
+          try {
+            // Try: zAdd(key, { member, score })
+            await redisAny.zAdd("leaderboard", {
+              member: username,
+              score: body.score,
+            });
+          } catch (e1) {
+            try {
+              // Try: zAdd(key, { score, member })
+              await redisAny.zAdd("leaderboard", {
+                score: body.score,
+                member: username,
+              });
+            } catch (e2) {
+              // Try: zAdd(key, score, member) as separate args
+              await redisAny.zAdd("leaderboard", body.score, username);
+            }
+          }
+        } else if (typeof redisAny.zadd === "function") {
+          await redisAny.zadd("leaderboard", body.score, username);
+        } else {
+          throw zaddError;
+        }
       }
 
       // Get the new rank (position) of the user (0-indexed, descending order)
