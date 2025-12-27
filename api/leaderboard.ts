@@ -37,11 +37,52 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    // Verify Redis connection
+    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    
+    if (!redisUrl || !redisToken) {
+      console.error("Redis environment variables missing");
+      return new Response(
+        JSON.stringify({ 
+          error: "Redis configuration missing",
+          entries: []
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+
+    console.log("Fetching leaderboard from Redis...");
+    
     // Get top 25 scores from Redis sorted set (sorted by score descending)
     // zrevrange returns an array alternating between member and score when withScores is true
-    const leaderboard = await redis.zrevrange<string>("leaderboard", 0, 24, {
-      withScores: true,
-    });
+    let leaderboard: any;
+    try {
+      leaderboard = await redis.zrevrange("leaderboard", 0, 24, {
+        withScores: true,
+      });
+      console.log("Redis response type:", typeof leaderboard, Array.isArray(leaderboard) ? `array[${leaderboard.length}]` : "not array");
+    } catch (redisError) {
+      console.error("Redis zrevrange error:", redisError);
+      // If the key doesn't exist, return empty array
+      if (redisError instanceof Error && redisError.message.includes("key")) {
+        console.log("Leaderboard key doesn't exist yet, returning empty");
+        return new Response(JSON.stringify({ entries: [] }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      }
+      throw redisError;
+    }
 
     const entries: LeaderboardEntry[] = [];
     
@@ -59,7 +100,20 @@ export default async function handler(req: Request): Promise<Response> {
           });
         }
       }
+    } else if (leaderboard && typeof leaderboard === "object") {
+      // Handle case where it might be an object/Record
+      console.log("Leaderboard is object, converting...");
+      let position = 1;
+      for (const [username, score] of Object.entries(leaderboard)) {
+        entries.push({
+          username,
+          score: Math.round(Number(score)),
+          position: position++,
+        });
+      }
     }
+
+    console.log(`Returning ${entries.length} entries`);
 
     return new Response(JSON.stringify({ entries }), {
       status: 200,
@@ -71,26 +125,16 @@ export default async function handler(req: Request): Promise<Response> {
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
     
-    // Check if it's a Redis connection error
-    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    
-    if (!redisUrl || !redisToken) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
-          entries: []
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
+    console.error("Error details:", {
+      message: errorMessage,
+      stack: errorStack,
+      env: {
+        hasUrl: !!process.env.KV_REST_API_URL,
+        hasToken: !!process.env.KV_REST_API_TOKEN,
+      }
+    });
     
     return new Response(
       JSON.stringify({ 
