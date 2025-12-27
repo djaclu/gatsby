@@ -149,34 +149,55 @@ export default async function handler(
 
     const entries: LeaderboardEntry[] = [];
 
-    // Upstash Redis returns an array that alternates: [member1, score1, member2, score2, ...]
+    // Upstash REST API returns ZREVRANGE result as an array
+    // Format can be: [member1, score1, member2, score2, ...] or just the result value
     if (Array.isArray(leaderboard)) {
-      for (let i = 0; i < leaderboard.length; i += 2) {
-        const username = leaderboard[i] as string;
-        const score = leaderboard[i + 1];
+      // Check if it's the alternating format [member, score, member, score, ...]
+      if (leaderboard.length > 0 && leaderboard.length % 2 === 0) {
+        for (let i = 0; i < leaderboard.length; i += 2) {
+          const username = leaderboard[i];
+          const score = leaderboard[i + 1];
 
-        if (
-          username &&
-          (typeof score === "number" || typeof score === "string")
-        ) {
-          entries.push({
-            username,
-            score: Math.round(Number(score)),
-            position: entries.length + 1,
-          });
+          if (
+            username != null &&
+            username !== "" &&
+            (score != null || score !== undefined)
+          ) {
+            const scoreNum = Number(score);
+            if (!isNaN(scoreNum)) {
+              entries.push({
+                username: String(username),
+                score: Math.round(scoreNum),
+                position: entries.length + 1,
+              });
+            }
+          }
         }
+      } else {
+        // Might be a different format, log it for debugging
+        console.log("Unexpected leaderboard array format:", leaderboard);
       }
     } else if (leaderboard && typeof leaderboard === "object") {
       // Handle case where it might be an object/Record
       console.log("Leaderboard is object, converting...");
       let position = 1;
       for (const [username, score] of Object.entries(leaderboard)) {
-        entries.push({
-          username,
-          score: Math.round(Number(score)),
-          position: position++,
-        });
+        const scoreNum = Number(score);
+        if (!isNaN(scoreNum) && username) {
+          entries.push({
+            username: String(username),
+            score: Math.round(scoreNum),
+            position: position++,
+          });
+        }
       }
+    } else if (leaderboard != null) {
+      // Single value or unexpected format
+      console.log(
+        "Unexpected leaderboard format:",
+        typeof leaderboard,
+        leaderboard
+      );
     }
 
     console.log(`Returning ${entries.length} entries`);

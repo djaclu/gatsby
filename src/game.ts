@@ -684,7 +684,19 @@ export class Game {
         console.log("Leaderboard data received:", data);
 
         // Use real data from API (even if empty)
-        this.leaderboardEntries = data.entries || [];
+        // Filter out any entries with null/undefined scores and ensure valid data
+        this.leaderboardEntries = (data.entries || [])
+          .filter(
+            (entry: any) => entry && entry.username && entry.score != null
+          )
+          .map((entry: any) => ({
+            username: entry.username || "Unknown",
+            score:
+              typeof entry.score === "number"
+                ? entry.score
+                : Number(entry.score) || 0,
+            position: entry.position || 0,
+          }));
 
         if (this.leaderboardEntries.length === 0) {
           console.log("Leaderboard is empty - no scores yet");
@@ -824,9 +836,11 @@ export class Game {
         const positionCell = document.createElement("td");
         positionCell.textContent = (startIndex + index + 1).toString();
         const usernameCell = document.createElement("td");
-        usernameCell.textContent = entry.username;
+        usernameCell.textContent = entry.username || "Unknown";
         const scoreCell = document.createElement("td");
-        scoreCell.textContent = entry.score.toLocaleString();
+        // Ensure score is a valid number before calling toLocaleString
+        const score = entry.score != null ? Number(entry.score) : 0;
+        scoreCell.textContent = isNaN(score) ? "0" : score.toLocaleString();
         row.appendChild(positionCell);
         row.appendChild(usernameCell);
         row.appendChild(scoreCell);
