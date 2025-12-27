@@ -147,40 +147,53 @@ export default async function handler(
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
-      // Use raw Redis command which is most reliable
+      // Use Upstash REST API directly to bypass library validation issues
+      const url =
+        process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+      const token =
+        process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      if (!url || !token) {
+        throw new Error("Redis REST API credentials not found");
+      }
+
       try {
-        await redisAny.sendCommand([
-          "ZADD",
-          "leaderboard",
-          body.score.toString(),
-          username,
-        ]);
-      } catch (zaddError) {
-        console.error("ZADD command error:", zaddError);
-        // Try alternative formats as fallback
+        // Upstash REST API format: POST to URL with command array in body
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify([
+            "ZADD",
+            "leaderboard",
+            body.score.toString(),
+            username,
+          ]),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Upstash REST API error:", response.status, errorText);
+          throw new Error(`Upstash API error: ${response.status} ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log("ZADD successful via REST API:", result);
+      } catch (restError) {
+        console.error("REST API call failed:", restError);
+        // Fallback to library method if REST API fails
+        const redisAny = redis as any;
         if (typeof redisAny.zAdd === "function") {
-          try {
-            // Try: zAdd(key, { member, score })
-            await redisAny.zAdd("leaderboard", {
-              member: username,
-              score: body.score,
-            });
-          } catch (e1) {
-            try {
-              // Try: zAdd(key, { score, member })
-              await redisAny.zAdd("leaderboard", {
-                score: body.score,
-                member: username,
-              });
-            } catch (e2) {
-              // Try: zAdd(key, score, member) as separate args
-              await redisAny.zAdd("leaderboard", body.score, username);
-            }
-          }
+          await redisAny.zAdd("leaderboard", {
+            score: body.score,
+            member: username,
+          });
         } else if (typeof redisAny.zadd === "function") {
           await redisAny.zadd("leaderboard", body.score, username);
         } else {
-          throw zaddError;
+          throw restError;
         }
       }
 
