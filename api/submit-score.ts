@@ -1,10 +1,10 @@
 import { Redis } from "@upstash/redis";
 
 // Initialize Redis - reads from environment variables automatically
-// Uses UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+// Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "",
 });
 
 interface SubmitScoreRequest {
@@ -143,12 +143,33 @@ export default async function handler(req: Request): Promise<Response> {
         ? error.message
         : "Failed to submit score";
     
+    // Check if Redis environment variables are missing
+    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    
+    if (!redisUrl || !redisToken) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
+          success: false
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+    
     // Check if it's a Redis connection error
     if (errorMessage.includes("UPSTASH") || errorMessage.includes("Redis") || errorMessage.includes("connection")) {
       return new Response(
         JSON.stringify({ 
           error: "Database connection failed. Please check your Redis configuration.",
-          details: process.env.UPSTASH_REDIS_REST_URL ? "URL configured" : "URL missing"
+          details: errorMessage,
+          success: false
         }),
         {
           status: 500,
@@ -163,7 +184,8 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(
       JSON.stringify({ 
         error: errorMessage,
-        type: "server_error"
+        type: "server_error",
+        success: false
       }),
       {
         status: 500,

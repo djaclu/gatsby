@@ -695,8 +695,41 @@ export class Game {
         }
       } else {
         // API returned an error status
-        const errorText = await response.text();
+        // Clone the response first so we can read it without consuming the original
+        const responseClone = response.clone();
+        let errorText = "";
+        try {
+          errorText = await responseClone.text();
+          // Try to parse as JSON
+          try {
+            const errorData = JSON.parse(errorText);
+            errorText =
+              errorData.error ||
+              errorData.message ||
+              errorData.details ||
+              errorText;
+          } catch {
+            // Not JSON, use text as-is
+          }
+        } catch (readError) {
+          errorText = `HTTP ${response.status}: ${response.statusText}`;
+        }
         console.error("Leaderboard API error:", response.status, errorText);
+
+        // Check if it's a configuration error
+        if (
+          errorText.includes("Redis configuration missing") ||
+          errorText.includes("UPSTASH")
+        ) {
+          console.warn("Redis not configured - using placeholder data");
+          this.loadPlaceholderLeaderboard();
+        } else if (response.status === 404) {
+          console.warn("API endpoint not found - using placeholder data");
+          this.loadPlaceholderLeaderboard();
+        } else {
+          // For other errors, show empty leaderboard
+          this.leaderboardEntries = [];
+        }
         // Only use placeholders if we can't connect to the API
         // If API returns empty, we should show empty leaderboard
         if (response.status === 404) {
@@ -947,15 +980,24 @@ export class Game {
         };
       } else {
         // Try to get error message from response
+        // Clone the response first so we can read it without consuming the original
+        const responseClone = response.clone();
         let errorMessage = "Failed to submit score";
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorMessage;
-          console.error("API error response:", errorData);
-        } catch {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-          console.error("API error text:", errorText);
+          const errorText = await responseClone.text();
+          // Try to parse as JSON
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorData.message || errorMessage;
+            console.error("API error response:", errorData);
+          } catch {
+            // Not JSON, use text as-is
+            errorMessage = errorText || errorMessage;
+            console.error("API error text:", errorText);
+          }
+        } catch (readError) {
+          console.error("Failed to read error response:", readError);
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
         console.error("Failed to submit score:", errorMessage, response.status);
         return {

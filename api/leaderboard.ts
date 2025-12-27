@@ -1,10 +1,10 @@
 import { Redis } from "@upstash/redis";
 
 // Initialize Redis - reads from environment variables automatically
-// Uses UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+// Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "",
 });
 
 interface LeaderboardEntry {
@@ -70,8 +70,34 @@ export default async function handler(req: Request): Promise<Response> {
     });
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Check if it's a Redis connection error
+    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    
+    if (!redisUrl || !redisToken) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
+          entries: []
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+    
     return new Response(
-      JSON.stringify({ error: "Failed to fetch leaderboard" }),
+      JSON.stringify({ 
+        error: "Failed to fetch leaderboard",
+        details: errorMessage,
+        entries: []
+      }),
       {
         status: 500,
         headers: {
