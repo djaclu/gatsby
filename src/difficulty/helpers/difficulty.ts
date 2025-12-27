@@ -1,4 +1,4 @@
-import { Game } from "../../game";
+import { Game, GameState } from "../../game";
 
 export enum DifficultyLevel {
   EASY,
@@ -50,4 +50,16 @@ export function changeDifficulty(game: Game, direction: number): void {
 
   const difficultySettings = DifficultySettings[game.difficulty];
   game.obstacleSpacing = difficultySettings.obstacleSpacing;
+
+  // Refresh leaderboard when difficulty changes (only if on start screen)
+  if (game.state === GameState.START) {
+    game.refreshLeaderboard().then(() => {
+      game.currentLeaderboardRange = 0;
+      game.displayLeaderboardRange(0);
+      // Only autoscroll if there are more than 10 entries
+      if (game.leaderboardEntries.length > 10) {
+        game.startLeaderboardAutoScroll();
+      }
+    });
+  }
 }

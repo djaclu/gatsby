@@ -51,7 +51,7 @@ const JUMP_STRENGTH = -Math.sqrt(
 const DEBUG = false;
 
 // Game state
-enum GameState {
+export enum GameState {
   START,
   PLAYING,
   GAME_OVER_ANIMATING,
@@ -131,9 +131,9 @@ export class Game {
   private backgroundMusic: HTMLAudioElement | null = null;
   private isMusicOn: boolean = false;
   private selectedMenuOption: "difficulty" | "music" = "difficulty";
-  private leaderboardEntries: { username: string; score: number }[] = [];
+  leaderboardEntries: { username: string; score: number }[] = [];
   private leaderboardScrollInterval: number | null = null;
-  private currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
+  currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
   private username: string = ""; // Store username for score submission
 
   constructor() {
@@ -428,6 +428,55 @@ export class Game {
       }
     });
 
+    // Add click listeners to difficulty arrows
+    const difficultyArrows =
+      this.difficultySelector.querySelectorAll(".difficulty-arrow");
+    if (difficultyArrows.length >= 2) {
+      // Left arrow - decrease difficulty
+      difficultyArrows[0].addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        changeDifficulty(this, -1);
+      });
+      // Right arrow - increase difficulty
+      difficultyArrows[1].addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        changeDifficulty(this, 1);
+      });
+    }
+
+    // Add click listeners to music arrows
+    const musicArrows =
+      this.musicSelector.querySelectorAll(".difficulty-arrow");
+    if (musicArrows.length >= 2) {
+      // Left arrow - toggle music off
+      musicArrows[0].addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleMusic(false);
+      });
+      // Right arrow - toggle music on
+      musicArrows[1].addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleMusic(true);
+      });
+    }
+
+    // Also allow clicking on the selector itself to toggle music
+    this.musicSelector.addEventListener("click", (e) => {
+      // Only toggle if clicking on the selector itself, not the arrows
+      if (
+        e.target === this.musicSelector ||
+        (e.target as HTMLElement).id === "music-text"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleMusic(!this.isMusicOn);
+      }
+    });
+
     this.quitBtn.addEventListener("click", () => {
       if (
         this.state === GameState.PLAYING ||
@@ -677,9 +726,15 @@ export class Game {
 
   private async initializeLeaderboard(): Promise<void> {
     try {
-      console.log("Fetching leaderboard from API...");
-      // Fetch leaderboard from API
-      const response = await fetch("/api/leaderboard");
+      const difficultyName = DifficultyLevel[this.difficulty].toLowerCase();
+      console.log(
+        "Fetching leaderboard from API for difficulty:",
+        difficultyName
+      );
+      // Fetch leaderboard from API with difficulty filter
+      const response = await fetch(
+        `/api/leaderboard?difficulty=${difficultyName}`
+      );
       console.log("Leaderboard API response status:", response.status);
 
       if (response.ok) {
@@ -792,7 +847,7 @@ export class Game {
     this.leaderboardEntries.sort((a, b) => b.score - a.score);
   }
 
-  private displayLeaderboardRange(range: number): void {
+  displayLeaderboardRange(range: number): void {
     const leaderboardBody = document.getElementById("leaderboard-body");
     if (!leaderboardBody) return;
 
@@ -846,7 +901,7 @@ export class Game {
     }, 150);
   }
 
-  private startLeaderboardAutoScroll(): void {
+  startLeaderboardAutoScroll(): void {
     // Only autoscroll if there are more than 10 scores
     if (this.leaderboardEntries.length <= 10) {
       return;
@@ -931,7 +986,12 @@ export class Game {
 
     try {
       // Submit score (API handles replacing if username exists)
-      const result = await this.submitScore(sanitizedUsername, this.score);
+      // Include difficulty level in the submission
+      const result = await this.submitScore(
+        sanitizedUsername,
+        this.score,
+        this.difficulty
+      );
 
       if (result.success) {
         // Save username for future games
@@ -977,16 +1037,22 @@ export class Game {
 
   private async submitScore(
     username: string,
-    score: number
+    score: number,
+    difficulty: DifficultyLevel
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      console.log("Submitting score:", { username, score });
+      const difficultyName = DifficultyLevel[difficulty].toLowerCase();
+      console.log("Submitting score:", {
+        username,
+        score,
+        difficulty: difficultyName,
+      });
       const response = await fetch("/api/submit-score", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, score }),
+        body: JSON.stringify({ username, score, difficulty: difficultyName }),
       });
 
       console.log("Response status:", response.status, response.statusText);
@@ -1050,10 +1116,13 @@ export class Game {
     }
   }
 
-  private async refreshLeaderboard(): Promise<void> {
+  async refreshLeaderboard(): Promise<void> {
     try {
-      console.log("Refreshing leaderboard...");
-      const response = await fetch("/api/leaderboard");
+      const difficultyName = DifficultyLevel[this.difficulty].toLowerCase();
+      console.log("Refreshing leaderboard for difficulty:", difficultyName);
+      const response = await fetch(
+        `/api/leaderboard?difficulty=${difficultyName}`
+      );
       if (response.ok) {
         const data = await response.json();
         this.leaderboardEntries = data.entries || [];

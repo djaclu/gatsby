@@ -51,6 +51,30 @@ export default async function handler(
     return;
   }
 
+  // Parse difficulty from query string
+  const url = new URL(
+    req.url || "/",
+    `http://${req.headers.host || "localhost"}`
+  );
+  let difficulty = url.searchParams.get("difficulty") || "medium";
+  difficulty = difficulty.toLowerCase();
+
+  // Validate difficulty
+  if (!["easy", "medium", "hard"].includes(difficulty)) {
+    res.statusCode = 400;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        error: "Invalid difficulty. Must be 'easy', 'medium', or 'hard'",
+        entries: [],
+      })
+    );
+    return;
+  }
+
+  // Use difficulty-specific leaderboard key
+  const leaderboardKey = `leaderboard:${difficulty}`;
+
   try {
     // Initialize Redis client
     let redis;
@@ -95,7 +119,7 @@ export default async function handler(
         },
         body: JSON.stringify([
           "ZREVRANGE",
-          "leaderboard",
+          leaderboardKey,
           "0",
           "24",
           "WITHSCORES",

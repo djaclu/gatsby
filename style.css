@@ -351,10 +351,25 @@ body {
 }
 
 .difficulty-arrow {
-    color: #000000;
-    font-size: 24px;
-    cursor: pointer;
-    user-select: none;
+  color: #000000;
+  font-size: 24px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+  padding: 5px 10px;
+  display: inline-block;
+}
+
+.difficulty-arrow:hover {
+  transform: scale(1.2);
+  opacity: 0.8;
+}
+
+.difficulty-arrow:active {
+  transform: scale(0.9);
 }
 
 .difficulty-hint {
