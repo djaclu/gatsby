@@ -160,14 +160,36 @@ export default async function handler(
 
     const entries: LeaderboardEntry[] = [];
 
-    // Upstash REST API returns ZREVRANGE result as an array
-    // Format can be: [member1, score1, member2, score2, ...] or just the result value
-    if (Array.isArray(leaderboard)) {
+    // Upstash REST API returns result wrapped in { result: [...] }
+    // Extract the actual array from the result property
+    let leaderboardArray: any = null;
+
+    if (leaderboard && typeof leaderboard === "object") {
+      // Check if it's wrapped in a result property (Upstash REST API format)
+      if ("result" in leaderboard && Array.isArray(leaderboard.result)) {
+        leaderboardArray = leaderboard.result;
+        console.log(
+          "Extracted result array from Upstash response:",
+          leaderboardArray
+        );
+      } else if (Array.isArray(leaderboard)) {
+        // Already an array
+        leaderboardArray = leaderboard;
+      } else {
+        // Try to extract from other possible properties
+        console.log("Leaderboard object structure:", Object.keys(leaderboard));
+      }
+    } else if (Array.isArray(leaderboard)) {
+      leaderboardArray = leaderboard;
+    }
+
+    // Parse the array if we have one
+    if (Array.isArray(leaderboardArray)) {
       // Check if it's the alternating format [member, score, member, score, ...]
-      if (leaderboard.length > 0 && leaderboard.length % 2 === 0) {
-        for (let i = 0; i < leaderboard.length; i += 2) {
-          const username = leaderboard[i];
-          const score = leaderboard[i + 1];
+      if (leaderboardArray.length > 0 && leaderboardArray.length % 2 === 0) {
+        for (let i = 0; i < leaderboardArray.length; i += 2) {
+          const username = leaderboardArray[i];
+          const score = leaderboardArray[i + 1];
 
           if (
             username != null &&
@@ -184,26 +206,19 @@ export default async function handler(
             }
           }
         }
-      } else {
+        console.log(`Parsed ${entries.length} entries from leaderboard array`);
+      } else if (leaderboardArray.length > 0) {
         // Might be a different format, log it for debugging
-        console.log("Unexpected leaderboard array format:", leaderboard);
-      }
-    } else if (leaderboard && typeof leaderboard === "object") {
-      // Handle case where it might be an object/Record
-      console.log("Leaderboard is object, converting...");
-      let position = 1;
-      for (const [username, score] of Object.entries(leaderboard)) {
-        const scoreNum = Number(score);
-        if (!isNaN(scoreNum) && username) {
-          entries.push({
-            username: String(username),
-            score: Math.round(scoreNum),
-            position: position++,
-          });
-        }
+        console.log(
+          "Unexpected leaderboard array format (length not even):",
+          leaderboardArray.length,
+          leaderboardArray
+        );
+      } else {
+        console.log("Leaderboard array is empty");
       }
     } else if (leaderboard != null) {
-      // Single value or unexpected format
+      // Unexpected format
       console.log(
         "Unexpected leaderboard format:",
         typeof leaderboard,
