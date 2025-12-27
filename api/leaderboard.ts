@@ -4,12 +4,13 @@ import { Redis } from "@upstash/redis";
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
 function getRedisClient() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  
+  const token =
+    process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
   if (!url || !token) {
     throw new Error("Redis environment variables not set");
   }
-  
+
   return new Redis({
     url,
     token,
@@ -53,10 +54,11 @@ export default async function handler(req: Request): Promise<Response> {
     } catch (initError) {
       console.error("Failed to initialize Redis:", initError);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: "Redis configuration error",
-          details: initError instanceof Error ? initError.message : String(initError),
-          entries: []
+          details:
+            initError instanceof Error ? initError.message : String(initError),
+          entries: [],
         }),
         {
           status: 500,
@@ -69,7 +71,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     console.log("Fetching leaderboard from Redis...");
-    
+
     // Get top 25 scores from Redis sorted set (sorted by score descending)
     // Use zRange with REV option to get scores in descending order
     let leaderboard: any;
@@ -77,19 +79,44 @@ export default async function handler(req: Request): Promise<Response> {
       // Get top 25 scores in reverse order (descending) with scores
       // @upstash/redis v1.36.0 uses zrange with REV option
       const redisAny = redis as any;
-      if (typeof redisAny.zrange === 'function') {
-        leaderboard = await redisAny.zrange("leaderboard", 0, 24, "REV", "WITHSCORES");
-      } else if (typeof redisAny.zRange === 'function') {
-        leaderboard = await redisAny.zRange("leaderboard", 0, 24, { rev: true, withScores: true });
+      if (typeof redisAny.zrange === "function") {
+        leaderboard = await redisAny.zrange(
+          "leaderboard",
+          0,
+          24,
+          "REV",
+          "WITHSCORES"
+        );
+      } else if (typeof redisAny.zRange === "function") {
+        leaderboard = await redisAny.zRange("leaderboard", 0, 24, {
+          rev: true,
+          withScores: true,
+        });
       } else {
         // Fallback: use command method if available
-        leaderboard = await redisAny.sendCommand(["ZREVRANGE", "leaderboard", "0", "24", "WITHSCORES"]);
+        leaderboard = await redisAny.sendCommand([
+          "ZREVRANGE",
+          "leaderboard",
+          "0",
+          "24",
+          "WITHSCORES",
+        ]);
       }
-      console.log("Redis response type:", typeof leaderboard, Array.isArray(leaderboard) ? `array[${leaderboard.length}]` : "not array");
+      console.log(
+        "Redis response type:",
+        typeof leaderboard,
+        Array.isArray(leaderboard)
+          ? `array[${leaderboard.length}]`
+          : "not array"
+      );
     } catch (redisError) {
       console.error("Redis zrevrange error:", redisError);
       // If the key doesn't exist, return empty array
-      if (redisError instanceof Error && (redisError.message.includes("key") || redisError.message.includes("not found"))) {
+      if (
+        redisError instanceof Error &&
+        (redisError.message.includes("key") ||
+          redisError.message.includes("not found"))
+      ) {
         console.log("Leaderboard key doesn't exist yet, returning empty");
         return new Response(JSON.stringify({ entries: [] }), {
           status: 200,
@@ -103,14 +130,17 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const entries: LeaderboardEntry[] = [];
-    
+
     // Upstash Redis returns an array that alternates: [member1, score1, member2, score2, ...]
     if (Array.isArray(leaderboard)) {
       for (let i = 0; i < leaderboard.length; i += 2) {
         const username = leaderboard[i] as string;
         const score = leaderboard[i + 1];
-        
-        if (username && (typeof score === "number" || typeof score === "string")) {
+
+        if (
+          username &&
+          (typeof score === "number" || typeof score === "string")
+        ) {
           entries.push({
             username,
             score: Math.round(Number(score)),
@@ -144,21 +174,21 @@ export default async function handler(req: Request): Promise<Response> {
     console.error("Error fetching leaderboard:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
-    
+
     console.error("Error details:", {
       message: errorMessage,
       stack: errorStack,
       env: {
         hasUrl: !!process.env.KV_REST_API_URL,
         hasToken: !!process.env.KV_REST_API_TOKEN,
-      }
+      },
     });
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: "Failed to fetch leaderboard",
         details: errorMessage,
-        entries: []
+        entries: [],
       }),
       {
         status: 500,
@@ -170,4 +200,3 @@ export default async function handler(req: Request): Promise<Response> {
     );
   }
 }
-

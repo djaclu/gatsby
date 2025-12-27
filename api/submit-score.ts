@@ -4,12 +4,13 @@ import { Redis } from "@upstash/redis";
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
 function getRedisClient() {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  
+  const token =
+    process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
   if (!url || !token) {
     throw new Error("Redis environment variables not set");
   }
-  
+
   return new Redis({
     url,
     token,
@@ -52,10 +53,11 @@ export default async function handler(req: Request): Promise<Response> {
     } catch (initError) {
       console.error("Failed to initialize Redis:", initError);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: "Redis configuration error",
-          details: initError instanceof Error ? initError.message : String(initError),
-          success: false
+          details:
+            initError instanceof Error ? initError.message : String(initError),
+          success: false,
         }),
         {
           status: 500,
@@ -103,7 +105,10 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Sanitize username (limit length, remove special characters)
-    const username = body.username.trim().slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, "");
+    const username = body.username
+      .trim()
+      .slice(0, 50)
+      .replace(/[^a-zA-Z0-9_-]/g, "");
 
     if (username.length === 0) {
       return new Response(
@@ -121,34 +126,50 @@ export default async function handler(req: Request): Promise<Response> {
     // Check if user already exists
     const redisAny = redis as any;
     let existingScore: number | null = null;
-    if (typeof redisAny.zscore === 'function') {
+    if (typeof redisAny.zscore === "function") {
       existingScore = await redisAny.zscore("leaderboard", username);
-    } else if (typeof redisAny.zScore === 'function') {
+    } else if (typeof redisAny.zScore === "function") {
       existingScore = await redisAny.zScore("leaderboard", username);
     } else {
-      const result = await redisAny.sendCommand(["ZSCORE", "leaderboard", username]);
+      const result = await redisAny.sendCommand([
+        "ZSCORE",
+        "leaderboard",
+        username,
+      ]);
       existingScore = result ? Number(result) : null;
     }
 
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
-      if (typeof redisAny.zadd === 'function') {
+      if (typeof redisAny.zadd === "function") {
         await redisAny.zadd("leaderboard", body.score, username);
-      } else if (typeof redisAny.zAdd === 'function') {
-        await redisAny.zAdd("leaderboard", { score: body.score, member: username });
+      } else if (typeof redisAny.zAdd === "function") {
+        await redisAny.zAdd("leaderboard", {
+          score: body.score,
+          member: username,
+        });
       } else {
-        await redisAny.sendCommand(["ZADD", "leaderboard", body.score.toString(), username]);
+        await redisAny.sendCommand([
+          "ZADD",
+          "leaderboard",
+          body.score.toString(),
+          username,
+        ]);
       }
 
       // Get the new rank (position) of the user (0-indexed, descending order)
       let rank: number | null = null;
-      if (typeof redisAny.zrevrank === 'function') {
+      if (typeof redisAny.zrevrank === "function") {
         rank = await redisAny.zrevrank("leaderboard", username);
-      } else if (typeof redisAny.zRank === 'function') {
+      } else if (typeof redisAny.zRank === "function") {
         rank = await redisAny.zRank("leaderboard", username, { rev: true });
       } else {
-        const result = await redisAny.sendCommand(["ZREVRANK", "leaderboard", username]);
+        const result = await redisAny.sendCommand([
+          "ZREVRANK",
+          "leaderboard",
+          username,
+        ]);
         rank = result !== null ? Number(result) : null;
       }
 
@@ -171,12 +192,16 @@ export default async function handler(req: Request): Promise<Response> {
     } else {
       // Score is not higher, return existing score info
       let rank: number | null = null;
-      if (typeof redisAny.zrevrank === 'function') {
+      if (typeof redisAny.zrevrank === "function") {
         rank = await redisAny.zrevrank("leaderboard", username);
-      } else if (typeof redisAny.zRank === 'function') {
+      } else if (typeof redisAny.zRank === "function") {
         rank = await redisAny.zRank("leaderboard", username, { rev: true });
       } else {
-        const result = await redisAny.sendCommand(["ZREVRANK", "leaderboard", username]);
+        const result = await redisAny.sendCommand([
+          "ZREVRANK",
+          "leaderboard",
+          username,
+        ]);
         rank = result !== null ? Number(result) : null;
       }
       return new Response(
@@ -200,19 +225,20 @@ export default async function handler(req: Request): Promise<Response> {
   } catch (error) {
     console.error("Error submitting score:", error);
     const errorMessage =
-      error instanceof Error
-        ? error.message
-        : "Failed to submit score";
-    
+      error instanceof Error ? error.message : "Failed to submit score";
+
     // Check if Redis environment variables are missing
-    const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    
+    const redisUrl =
+      process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken =
+      process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
     if (!redisUrl || !redisToken) {
       return new Response(
-        JSON.stringify({ 
-          error: "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
-          success: false
+        JSON.stringify({
+          error:
+            "Redis configuration missing. Please set KV_REST_API_URL and KV_REST_API_TOKEN environment variables.",
+          success: false,
         }),
         {
           status: 500,
@@ -223,14 +249,19 @@ export default async function handler(req: Request): Promise<Response> {
         }
       );
     }
-    
+
     // Check if it's a Redis connection error
-    if (errorMessage.includes("UPSTASH") || errorMessage.includes("Redis") || errorMessage.includes("connection")) {
+    if (
+      errorMessage.includes("UPSTASH") ||
+      errorMessage.includes("Redis") ||
+      errorMessage.includes("connection")
+    ) {
       return new Response(
-        JSON.stringify({ 
-          error: "Database connection failed. Please check your Redis configuration.",
+        JSON.stringify({
+          error:
+            "Database connection failed. Please check your Redis configuration.",
           details: errorMessage,
-          success: false
+          success: false,
         }),
         {
           status: 500,
@@ -241,12 +272,12 @@ export default async function handler(req: Request): Promise<Response> {
         }
       );
     }
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: errorMessage,
         type: "server_error",
-        success: false
+        success: false,
       }),
       {
         status: 500,
@@ -258,4 +289,3 @@ export default async function handler(req: Request): Promise<Response> {
     );
   }
 }
-
