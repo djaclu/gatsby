@@ -674,27 +674,60 @@ export class Game {
 
   private async initializeLeaderboard(): Promise<void> {
     try {
+      console.log("Fetching leaderboard from API...");
       // Fetch leaderboard from API
       const response = await fetch("/api/leaderboard");
+      console.log("Leaderboard API response status:", response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log("Leaderboard data received:", data);
+
+        // Use real data from API (even if empty)
         this.leaderboardEntries = data.entries || [];
+
+        if (this.leaderboardEntries.length === 0) {
+          console.log("Leaderboard is empty - no scores yet");
+        } else {
+          console.log(
+            `Loaded ${this.leaderboardEntries.length} entries from database`
+          );
+        }
       } else {
-        // Fallback to placeholder data if API fails
-        this.loadPlaceholderLeaderboard();
+        // API returned an error status
+        const errorText = await response.text();
+        console.error("Leaderboard API error:", response.status, errorText);
+        // Only use placeholders if we can't connect to the API
+        // If API returns empty, we should show empty leaderboard
+        if (response.status === 404) {
+          console.warn("API endpoint not found - using placeholder data");
+          this.loadPlaceholderLeaderboard();
+        } else {
+          // For other errors, try to show empty or use placeholders
+          this.leaderboardEntries = [];
+        }
       }
     } catch (error) {
       console.error("Failed to fetch leaderboard:", error);
-      // Fallback to placeholder data
-      this.loadPlaceholderLeaderboard();
+      // Only use placeholders if it's a network/connection error
+      // Check if it's a fetch error (API not available)
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        console.warn("API not available - using placeholder data");
+        this.loadPlaceholderLeaderboard();
+      } else {
+        // For other errors, show empty leaderboard
+        this.leaderboardEntries = [];
+      }
     }
 
-    // Display top 10 by default
+    // Display top 10 by default (or empty if no data)
     this.currentLeaderboardRange = 0;
     this.displayLeaderboardRange(0);
 
-    // Start auto-scrolling
-    this.startLeaderboardAutoScroll();
+    // Start auto-scrolling (only if we have entries)
+    if (this.leaderboardEntries.length > 0) {
+      this.startLeaderboardAutoScroll();
+    }
   }
 
   private loadPlaceholderLeaderboard(): void {
@@ -715,19 +748,34 @@ export class Game {
     const leaderboardBody = document.getElementById("leaderboard-body");
     if (!leaderboardBody) return;
 
+    // If no entries, show empty state
+    if (this.leaderboardEntries.length === 0) {
+      leaderboardBody.innerHTML = "";
+      const row = document.createElement("tr");
+      const emptyCell = document.createElement("td");
+      emptyCell.colSpan = 3;
+      emptyCell.textContent = "No scores yet";
+      emptyCell.style.textAlign = "center";
+      emptyCell.style.color = "#888";
+      emptyCell.style.padding = "20px";
+      row.appendChild(emptyCell);
+      leaderboardBody.appendChild(row);
+      return;
+    }
+
     // Define ranges: 0 = 1-10, 1 = 11-20, 2 = 21-25
     let startIndex: number;
     let endIndex: number;
 
     if (range === 0) {
       startIndex = 0;
-      endIndex = 10;
+      endIndex = Math.min(10, this.leaderboardEntries.length);
     } else if (range === 1) {
       startIndex = 10;
-      endIndex = 20;
+      endIndex = Math.min(20, this.leaderboardEntries.length);
     } else {
       startIndex = 20;
-      endIndex = 25;
+      endIndex = Math.min(25, this.leaderboardEntries.length);
     }
 
     // Get entries for this range
@@ -940,16 +988,27 @@ export class Game {
 
   private async refreshLeaderboard(): Promise<void> {
     try {
+      console.log("Refreshing leaderboard...");
       const response = await fetch("/api/leaderboard");
       if (response.ok) {
         const data = await response.json();
         this.leaderboardEntries = data.entries || [];
+        console.log(
+          `Refreshed leaderboard: ${this.leaderboardEntries.length} entries`
+        );
 
         // Update display if we're on the start screen
         if (this.state === GameState.START) {
           this.currentLeaderboardRange = 0;
           this.displayLeaderboardRange(0);
+
+          // Restart auto-scroll if we have entries
+          if (this.leaderboardEntries.length > 0) {
+            this.startLeaderboardAutoScroll();
+          }
         }
+      } else {
+        console.error("Failed to refresh leaderboard:", response.status);
       }
     } catch (error) {
       console.error("Failed to refresh leaderboard:", error);
