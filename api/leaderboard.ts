@@ -71,10 +71,11 @@ export default async function handler(req: Request): Promise<Response> {
     console.log("Fetching leaderboard from Redis...");
     
     // Get top 25 scores from Redis sorted set (sorted by score descending)
-    // zrevrange returns an array alternating between member and score when withScores is true
+    // Use zRange with REV option to get scores in descending order
     let leaderboard: any;
     try {
-      leaderboard = await redis.zrevrange("leaderboard", 0, 24, {
+      leaderboard = await redis.zRange("leaderboard", 0, 24, {
+        rev: true,
         withScores: true,
       });
       console.log("Redis response type:", typeof leaderboard, Array.isArray(leaderboard) ? `array[${leaderboard.length}]` : "not array");

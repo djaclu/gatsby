@@ -119,16 +119,19 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // Check if user already exists
-    const existingScore = await redis.zscore("leaderboard", username);
+    const existingScore = await redis.zScore("leaderboard", username);
 
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
       // ZADD adds the member with the score, or updates if it exists
-      await redis.zadd("leaderboard", body.score, username);
+      await redis.zAdd("leaderboard", {
+        score: body.score,
+        member: username,
+      });
 
-      // Get the new rank (position) of the user
-      const rank = await redis.zrevrank("leaderboard", username);
+      // Get the new rank (position) of the user (0-indexed, descending order)
+      const rank = await redis.zRank("leaderboard", username, { rev: true });
 
       return new Response(
         JSON.stringify({
@@ -148,7 +151,7 @@ export default async function handler(req: Request): Promise<Response> {
       );
     } else {
       // Score is not higher, return existing score info
-      const rank = await redis.zrevrank("leaderboard", username);
+      const rank = await redis.zRank("leaderboard", username, { rev: true });
       return new Response(
         JSON.stringify({
           success: false,
