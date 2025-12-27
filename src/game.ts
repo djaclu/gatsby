@@ -674,125 +674,27 @@ export class Game {
 
   private async initializeLeaderboard(): Promise<void> {
     try {
-      console.log("Fetching leaderboard from API...");
       // Fetch leaderboard from API
       const response = await fetch("/api/leaderboard");
-      console.log("Leaderboard API response status:", response.status);
-
       if (response.ok) {
-        // Check if response is actually JSON (not TypeScript source)
-        const responseText = await response.text();
-
-        // Detect if we got TypeScript source instead of JSON
-        if (
-          responseText.trim().startsWith("import") ||
-          responseText.trim().startsWith("export")
-        ) {
-          console.warn(
-            "⚠️ API returned TypeScript source. Use 'npm run dev:vercel' instead of 'npm run dev' for API support."
-          );
-          this.showApiWarning();
-          this.leaderboardEntries = [];
-          this.padLeaderboardEntries();
-          this.currentLeaderboardRange = 0;
-          this.displayLeaderboardRange(0);
-          return;
-        }
-
-        let data;
-        try {
-          data = JSON.parse(responseText);
-          console.log("Leaderboard data received:", data);
-        } catch (parseError) {
-          console.error("Failed to parse leaderboard JSON:", parseError);
-          console.error("Response was:", responseText.substring(0, 200));
-          this.leaderboardEntries = [];
-          this.padLeaderboardEntries();
-          this.currentLeaderboardRange = 0;
-          this.displayLeaderboardRange(0);
-          return;
-        }
-
-        // Use real data from API (even if empty array)
-        if (data.entries && Array.isArray(data.entries)) {
-          this.leaderboardEntries = data.entries;
-          console.log(
-            `Loaded ${this.leaderboardEntries.length} entries from database`
-          );
-        } else {
-          // If entries is missing or not an array, use empty array
-          this.leaderboardEntries = [];
-          console.log("No entries in response, using empty leaderboard");
-        }
+        const data = await response.json();
+        this.leaderboardEntries = data.entries || [];
       } else {
-        // API returned an error status
-        const errorText = await response.text();
-        console.error("Leaderboard API error:", response.status, errorText);
-        // Only use placeholders if we can't connect to API at all
-        // For now, use empty array to show no scores
-        this.leaderboardEntries = [];
+        // Fallback to placeholder data if API fails
+        this.loadPlaceholderLeaderboard();
       }
     } catch (error) {
       console.error("Failed to fetch leaderboard:", error);
-      // Network error or API not available - use empty array instead of placeholders
-      // This way users see an empty leaderboard rather than fake data
-      this.leaderboardEntries = [];
-      console.log("Using empty leaderboard due to fetch error");
+      // Fallback to placeholder data
+      this.loadPlaceholderLeaderboard();
     }
 
-    // Pad entries and display
-    this.padLeaderboardEntries();
+    // Display top 10 by default
     this.currentLeaderboardRange = 0;
     this.displayLeaderboardRange(0);
 
-    // Start auto-scrolling only if we have real entries
-    if (this.leaderboardEntries.some((e) => e.username !== "-")) {
-      this.startLeaderboardAutoScroll();
-    }
-  }
-
-  private padLeaderboardEntries(): void {
-    // If we have less than 25 entries, pad with empty slots for display
-    // But don't add fake placeholder data
-    while (this.leaderboardEntries.length < 25) {
-      this.leaderboardEntries.push({
-        username: "-",
-        score: 0,
-      });
-    }
-  }
-
-  private showApiWarning(): void {
-    // Show a warning message in the leaderboard area
-    const leaderboardContainer = document.getElementById(
-      "leaderboard-container"
-    );
-    if (!leaderboardContainer) return;
-
-    // Check if warning already exists
-    let warning = document.getElementById("api-warning");
-    if (!warning) {
-      warning = document.createElement("div");
-      warning.id = "api-warning";
-      warning.style.cssText = `
-        background: rgba(255, 200, 0, 0.2);
-        border: 2px solid #ffc800;
-        border-radius: 5px;
-        padding: 10px;
-        margin-bottom: 10px;
-        font-size: 12px;
-        color: #ffc800;
-        text-align: center;
-      `;
-      warning.innerHTML = `
-        <strong>⚠️ API Not Available</strong><br>
-        Run <code style="background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 3px;">npm run dev:vercel</code> for leaderboard support
-      `;
-      const leaderboardTable = document.getElementById("leaderboard-table");
-      if (leaderboardTable && leaderboardTable.parentNode) {
-        leaderboardTable.parentNode.insertBefore(warning, leaderboardTable);
-      }
-    }
+    // Start auto-scrolling
+    this.startLeaderboardAutoScroll();
   }
 
   private loadPlaceholderLeaderboard(): void {
@@ -843,9 +745,7 @@ export class Game {
         const usernameCell = document.createElement("td");
         usernameCell.textContent = entry.username;
         const scoreCell = document.createElement("td");
-        // Only show score if it's a real entry (not placeholder "-")
-        scoreCell.textContent =
-          entry.username !== "-" ? entry.score.toLocaleString() : "-";
+        scoreCell.textContent = entry.score.toLocaleString();
         row.appendChild(positionCell);
         row.appendChild(usernameCell);
         row.appendChild(scoreCell);
@@ -906,19 +806,6 @@ export class Game {
 
     // If username is empty, do nothing
     if (!username) {
-      return;
-    }
-
-    // Check if API is available (not running with Vite dev)
-    // This is a quick check - if we're getting 404s, API isn't available
-    if (
-      window.location.hostname === "localhost" &&
-      window.location.port === "5173"
-    ) {
-      this.showSubmitMessage(
-        "API not available. Use 'npm run dev:vercel' for score submission.",
-        "error"
-      );
       return;
     }
 
@@ -1011,23 +898,16 @@ export class Game {
             (data.success ? "Score submitted!" : "Score not updated."),
         };
       } else {
-        // Try to get error message from response (read body only once)
+        // Try to get error message from response
         let errorMessage = "Failed to submit score";
         try {
-          // Read response as text first, then try to parse as JSON
-          const responseText = await response.text();
-          try {
-            const errorData = JSON.parse(responseText);
-            errorMessage = errorData.error || errorMessage;
-            console.error("API error response:", errorData);
-          } catch {
-            // Not JSON, use the text as error message
-            errorMessage = responseText || errorMessage;
-            console.error("API error text:", responseText);
-          }
-        } catch (textError) {
-          console.error("Could not read error response:", textError);
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          console.error("API error response:", errorData);
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+          console.error("API error text:", errorText);
         }
         console.error("Failed to submit score:", errorMessage, response.status);
         return {
@@ -1060,31 +940,16 @@ export class Game {
 
   private async refreshLeaderboard(): Promise<void> {
     try {
-      console.log("Refreshing leaderboard from API...");
       const response = await fetch("/api/leaderboard");
       if (response.ok) {
         const data = await response.json();
-        console.log("Refreshed leaderboard data:", data);
+        this.leaderboardEntries = data.entries || [];
 
-        if (data.entries && Array.isArray(data.entries)) {
-          this.leaderboardEntries = data.entries;
-
-          // Pad with empty entries if needed
-          while (this.leaderboardEntries.length < 25) {
-            this.leaderboardEntries.push({
-              username: "-",
-              score: 0,
-            });
-          }
-
-          // Update display if we're on the start screen
-          if (this.state === GameState.START) {
-            this.currentLeaderboardRange = 0;
-            this.displayLeaderboardRange(0);
-          }
+        // Update display if we're on the start screen
+        if (this.state === GameState.START) {
+          this.currentLeaderboardRange = 0;
+          this.displayLeaderboardRange(0);
         }
-      } else {
-        console.error("Failed to refresh leaderboard:", response.status);
       }
     } catch (error) {
       console.error("Failed to refresh leaderboard:", error);

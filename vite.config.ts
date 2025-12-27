@@ -52,12 +52,4 @@ function copyAssetsPlugin() {
 
 export default defineConfig({
   plugins: [copyAssetsPlugin()],
-  server: {
-    // Exclude API folder from being served by Vite
-    // API routes should only work with Vercel dev or in production
-    fs: {
-      deny: ["./api"],
-    },
-  },
-  publicDir: false, // We handle public assets manually
 });
