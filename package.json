@@ -2,7 +2,6 @@
   "name": "gatsbys-world",
   "version": "1.0.0",
   "description": "Endless 2D scrolling game",
-  "type": "module",
   "scripts": {
     "build": "vite build",
     "watch": "tsc --watch",

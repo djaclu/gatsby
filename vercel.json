@@ -1,9 +1,8 @@
 {
   "functions": {
     "api/**/*.ts": {
-      "runtime": "nodejs20.x"
+      "runtime": "nodejs@20.x"
     }
-  },
-  "buildCommand": "npm run build"
+  }
 }
 
