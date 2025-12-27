@@ -122,12 +122,19 @@ export class Game {
   private instructions: HTMLElement;
   private quitBtn: HTMLButtonElement;
   private topUIContainer: HTMLElement;
+  private usernameInput: HTMLInputElement;
+  private submitScoreBtn: HTMLButtonElement;
+  private submitMessage: HTMLElement;
   private difficultySelector!: HTMLElement;
   private musicSelector!: HTMLElement;
   private musicText!: HTMLElement;
   private backgroundMusic: HTMLAudioElement | null = null;
   private isMusicOn: boolean = false;
   private selectedMenuOption: "difficulty" | "music" = "difficulty";
+  private leaderboardEntries: { username: string; score: number }[] = [];
+  private leaderboardScrollInterval: number | null = null;
+  private currentLeaderboardRange: number = 0; // 0 = 1-10, 1 = 11-20, 2 = 21-25
+  private username: string = ""; // Store username for score submission
 
   constructor() {
     this.canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
@@ -156,12 +163,22 @@ export class Game {
     this.returnStartBtn = document.getElementById(
       "return-start-btn"
     ) as HTMLButtonElement;
+    this.usernameInput = document.getElementById(
+      "username-input"
+    ) as HTMLInputElement;
+    this.submitScoreBtn = document.getElementById(
+      "submit-score-btn"
+    ) as HTMLButtonElement;
+    this.submitMessage = document.getElementById("submit-message")!;
 
     // Initialize difficulty display
     this.difficultyText.textContent = DifficultyLevel[this.difficulty];
 
     // Show instructions on start screen
     this.instructions.classList.remove("hidden");
+
+    // Initialize leaderboard with placeholder data
+    this.initializeLeaderboard();
 
     // Try to load character image, fallback to rectangle if not found
     this.loadCharacterImage();
@@ -398,6 +415,19 @@ export class Game {
       }
     });
 
+    // Submit score button
+    this.submitScoreBtn.addEventListener("click", () => {
+      this.handleScoreSubmission();
+    });
+
+    // Allow Enter key to submit score
+    this.usernameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.handleScoreSubmission();
+      }
+    });
+
     this.quitBtn.addEventListener("click", () => {
       if (
         this.state === GameState.PLAYING ||
@@ -513,6 +543,8 @@ export class Game {
   }
 
   private startGame(): void {
+    // Stop leaderboard auto-scroll when game starts
+    this.stopLeaderboardAutoScroll();
     this.state = GameState.PLAYING;
     this.startScreen.classList.add("hidden");
     this.instructions.classList.add("hidden");
@@ -533,6 +565,12 @@ export class Game {
     this.instructions.classList.remove("hidden");
     this.topUIContainer.classList.add("hidden");
     this.resetGame();
+    // Refresh and restart leaderboard auto-scroll when returning to start screen
+    this.refreshLeaderboard().then(() => {
+      this.currentLeaderboardRange = 0;
+      this.displayLeaderboardRange(0);
+      this.startLeaderboardAutoScroll();
+    });
   }
 
   private resetGame(): void {
@@ -634,6 +672,210 @@ export class Game {
     }
   }
 
+  private async initializeLeaderboard(): Promise<void> {
+    try {
+      console.log("Fetching leaderboard from API...");
+      // Fetch leaderboard from API
+      const response = await fetch("/api/leaderboard");
+      console.log("Leaderboard API response status:", response.status);
+
+      if (response.ok) {
+        // Check if response is actually JSON (not TypeScript source)
+        const responseText = await response.text();
+
+        // Detect if we got TypeScript source instead of JSON
+        if (
+          responseText.trim().startsWith("import") ||
+          responseText.trim().startsWith("export")
+        ) {
+          console.warn(
+            "⚠️ API returned TypeScript source. Use 'npm run dev:vercel' instead of 'npm run dev' for API support."
+          );
+          this.showApiWarning();
+          this.leaderboardEntries = [];
+          this.padLeaderboardEntries();
+          this.currentLeaderboardRange = 0;
+          this.displayLeaderboardRange(0);
+          return;
+        }
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+          console.log("Leaderboard data received:", data);
+        } catch (parseError) {
+          console.error("Failed to parse leaderboard JSON:", parseError);
+          console.error("Response was:", responseText.substring(0, 200));
+          this.leaderboardEntries = [];
+          this.padLeaderboardEntries();
+          this.currentLeaderboardRange = 0;
+          this.displayLeaderboardRange(0);
+          return;
+        }
+
+        // Use real data from API (even if empty array)
+        if (data.entries && Array.isArray(data.entries)) {
+          this.leaderboardEntries = data.entries;
+          console.log(
+            `Loaded ${this.leaderboardEntries.length} entries from database`
+          );
+        } else {
+          // If entries is missing or not an array, use empty array
+          this.leaderboardEntries = [];
+          console.log("No entries in response, using empty leaderboard");
+        }
+      } else {
+        // API returned an error status
+        const errorText = await response.text();
+        console.error("Leaderboard API error:", response.status, errorText);
+        // Only use placeholders if we can't connect to API at all
+        // For now, use empty array to show no scores
+        this.leaderboardEntries = [];
+      }
+    } catch (error) {
+      console.error("Failed to fetch leaderboard:", error);
+      // Network error or API not available - use empty array instead of placeholders
+      // This way users see an empty leaderboard rather than fake data
+      this.leaderboardEntries = [];
+      console.log("Using empty leaderboard due to fetch error");
+    }
+
+    // Pad entries and display
+    this.padLeaderboardEntries();
+    this.currentLeaderboardRange = 0;
+    this.displayLeaderboardRange(0);
+
+    // Start auto-scrolling only if we have real entries
+    if (this.leaderboardEntries.some((e) => e.username !== "-")) {
+      this.startLeaderboardAutoScroll();
+    }
+  }
+
+  private padLeaderboardEntries(): void {
+    // If we have less than 25 entries, pad with empty slots for display
+    // But don't add fake placeholder data
+    while (this.leaderboardEntries.length < 25) {
+      this.leaderboardEntries.push({
+        username: "-",
+        score: 0,
+      });
+    }
+  }
+
+  private showApiWarning(): void {
+    // Show a warning message in the leaderboard area
+    const leaderboardContainer = document.getElementById(
+      "leaderboard-container"
+    );
+    if (!leaderboardContainer) return;
+
+    // Check if warning already exists
+    let warning = document.getElementById("api-warning");
+    if (!warning) {
+      warning = document.createElement("div");
+      warning.id = "api-warning";
+      warning.style.cssText = `
+        background: rgba(255, 200, 0, 0.2);
+        border: 2px solid #ffc800;
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 10px;
+        font-size: 12px;
+        color: #ffc800;
+        text-align: center;
+      `;
+      warning.innerHTML = `
+        <strong>⚠️ API Not Available</strong><br>
+        Run <code style="background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 3px;">npm run dev:vercel</code> for leaderboard support
+      `;
+      const leaderboardTable = document.getElementById("leaderboard-table");
+      if (leaderboardTable && leaderboardTable.parentNode) {
+        leaderboardTable.parentNode.insertBefore(warning, leaderboardTable);
+      }
+    }
+  }
+
+  private loadPlaceholderLeaderboard(): void {
+    // Generate placeholder data for top 25 scores
+    this.leaderboardEntries = [];
+    for (let i = 1; i <= 25; i++) {
+      this.leaderboardEntries.push({
+        username: `Player${i}`,
+        score: Math.floor(Math.random() * 10000) + 1000,
+      });
+    }
+
+    // Sort by score descending
+    this.leaderboardEntries.sort((a, b) => b.score - a.score);
+  }
+
+  private displayLeaderboardRange(range: number): void {
+    const leaderboardBody = document.getElementById("leaderboard-body");
+    if (!leaderboardBody) return;
+
+    // Define ranges: 0 = 1-10, 1 = 11-20, 2 = 21-25
+    let startIndex: number;
+    let endIndex: number;
+
+    if (range === 0) {
+      startIndex = 0;
+      endIndex = 10;
+    } else if (range === 1) {
+      startIndex = 10;
+      endIndex = 20;
+    } else {
+      startIndex = 20;
+      endIndex = 25;
+    }
+
+    // Get entries for this range
+    const entriesToShow = this.leaderboardEntries.slice(startIndex, endIndex);
+
+    // Fade out, update, fade in
+    leaderboardBody.style.opacity = "0";
+    setTimeout(() => {
+      // Populate table
+      leaderboardBody.innerHTML = "";
+      entriesToShow.forEach((entry, index) => {
+        const row = document.createElement("tr");
+        const positionCell = document.createElement("td");
+        positionCell.textContent = (startIndex + index + 1).toString();
+        const usernameCell = document.createElement("td");
+        usernameCell.textContent = entry.username;
+        const scoreCell = document.createElement("td");
+        // Only show score if it's a real entry (not placeholder "-")
+        scoreCell.textContent =
+          entry.username !== "-" ? entry.score.toLocaleString() : "-";
+        row.appendChild(positionCell);
+        row.appendChild(usernameCell);
+        row.appendChild(scoreCell);
+        leaderboardBody.appendChild(row);
+      });
+      leaderboardBody.style.opacity = "1";
+    }, 150);
+  }
+
+  private startLeaderboardAutoScroll(): void {
+    // Clear any existing interval
+    if (this.leaderboardScrollInterval !== null) {
+      clearInterval(this.leaderboardScrollInterval);
+    }
+
+    // Auto-scroll every 3 seconds
+    this.leaderboardScrollInterval = window.setInterval(() => {
+      // Cycle through ranges: 0 -> 1 -> 2 -> 0
+      this.currentLeaderboardRange = (this.currentLeaderboardRange + 1) % 3;
+      this.displayLeaderboardRange(this.currentLeaderboardRange);
+    }, 3000);
+  }
+
+  private stopLeaderboardAutoScroll(): void {
+    if (this.leaderboardScrollInterval !== null) {
+      clearInterval(this.leaderboardScrollInterval);
+      this.leaderboardScrollInterval = null;
+    }
+  }
+
   private gameOver(): void {
     // Start the animation instead of immediately showing game over screen
     this.state = GameState.GAME_OVER_ANIMATING;
@@ -646,6 +888,207 @@ export class Game {
     this.state = GameState.GAME_OVER;
     this.topUIContainer.classList.add("hidden");
     this.gameOverScreen.classList.remove("hidden");
+
+    // Clear username input and message
+    this.usernameInput.value = "";
+    this.submitMessage.textContent = "";
+    this.submitMessage.classList.add("hidden");
+
+    // Load saved username if available
+    const savedUsername = localStorage.getItem("gatsbys-username");
+    if (savedUsername) {
+      this.usernameInput.value = savedUsername;
+    }
+  }
+
+  private async handleScoreSubmission(): Promise<void> {
+    const username = this.usernameInput.value.trim();
+
+    // If username is empty, do nothing
+    if (!username) {
+      return;
+    }
+
+    // Check if API is available (not running with Vite dev)
+    // This is a quick check - if we're getting 404s, API isn't available
+    if (
+      window.location.hostname === "localhost" &&
+      window.location.port === "5173"
+    ) {
+      this.showSubmitMessage(
+        "API not available. Use 'npm run dev:vercel' for score submission.",
+        "error"
+      );
+      return;
+    }
+
+    // Sanitize username (remove special characters, limit length)
+    const sanitizedUsername = username
+      .slice(0, 50)
+      .replace(/[^a-zA-Z0-9_-]/g, "");
+
+    if (sanitizedUsername.length === 0) {
+      this.showSubmitMessage(
+        "Invalid username. Use only letters, numbers, hyphens, and underscores.",
+        "error"
+      );
+      return;
+    }
+
+    // Disable button during submission
+    this.submitScoreBtn.disabled = true;
+    this.submitScoreBtn.textContent = "Submitting...";
+
+    try {
+      // Submit score (API handles replacing if username exists)
+      const result = await this.submitScore(sanitizedUsername, this.score);
+
+      if (result.success) {
+        // Save username for future games
+        localStorage.setItem("gatsbys-username", sanitizedUsername);
+        this.showSubmitMessage(
+          result.message || "Score submitted successfully!",
+          "success"
+        );
+
+        // Refresh leaderboard after submission
+        await this.refreshLeaderboard();
+      } else {
+        // Show the actual error message from the API
+        this.showSubmitMessage(
+          result.message || "Failed to submit score. Please try again.",
+          "error"
+        );
+      }
+    } catch (error) {
+      console.error("Error submitting score:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Error submitting score. Please try again.";
+      this.showSubmitMessage(errorMessage, "error");
+    } finally {
+      // Re-enable button
+      this.submitScoreBtn.disabled = false;
+      this.submitScoreBtn.textContent = "Submit Score";
+    }
+  }
+
+  private showSubmitMessage(message: string, type: "success" | "error"): void {
+    this.submitMessage.textContent = message;
+    this.submitMessage.classList.remove("hidden");
+    this.submitMessage.className = `submit-message ${type}`;
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      this.submitMessage.classList.add("hidden");
+    }, 3000);
+  }
+
+  private async submitScore(
+    username: string,
+    score: number
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log("Submitting score:", { username, score });
+      const response = await fetch("/api/submit-score", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, score }),
+      });
+
+      console.log("Response status:", response.status, response.statusText);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Score submitted:", data);
+        return {
+          success: data.success !== false,
+          message:
+            data.message ||
+            (data.success ? "Score submitted!" : "Score not updated."),
+        };
+      } else {
+        // Try to get error message from response (read body only once)
+        let errorMessage = "Failed to submit score";
+        try {
+          // Read response as text first, then try to parse as JSON
+          const responseText = await response.text();
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorMessage;
+            console.error("API error response:", errorData);
+          } catch {
+            // Not JSON, use the text as error message
+            errorMessage = responseText || errorMessage;
+            console.error("API error text:", responseText);
+          }
+        } catch (textError) {
+          console.error("Could not read error response:", textError);
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        console.error("Failed to submit score:", errorMessage, response.status);
+        return {
+          success: false,
+          message: errorMessage,
+        };
+      }
+    } catch (error) {
+      console.error("Error submitting score:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Network error. Please check your connection and ensure the API is running.";
+
+      // Check if it's a 404 (API not found)
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        return {
+          success: false,
+          message:
+            "API endpoint not found. Make sure the serverless function is deployed.",
+        };
+      }
+
+      return {
+        success: false,
+        message: errorMessage,
+      };
+    }
+  }
+
+  private async refreshLeaderboard(): Promise<void> {
+    try {
+      console.log("Refreshing leaderboard from API...");
+      const response = await fetch("/api/leaderboard");
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Refreshed leaderboard data:", data);
+
+        if (data.entries && Array.isArray(data.entries)) {
+          this.leaderboardEntries = data.entries;
+
+          // Pad with empty entries if needed
+          while (this.leaderboardEntries.length < 25) {
+            this.leaderboardEntries.push({
+              username: "-",
+              score: 0,
+            });
+          }
+
+          // Update display if we're on the start screen
+          if (this.state === GameState.START) {
+            this.currentLeaderboardRange = 0;
+            this.displayLeaderboardRange(0);
+          }
+        }
+      } else {
+        console.error("Failed to refresh leaderboard:", response.status);
+      }
+    } catch (error) {
+      console.error("Failed to refresh leaderboard:", error);
+    }
   }
 
   private update(): void {

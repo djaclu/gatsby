@@ -56,6 +56,90 @@ body {
     min-width: 500px;
 }
 
+#start-screen-content {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+#start-screen-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#leaderboard-container {
+    min-width: 300px;
+    max-width: 350px;
+}
+
+#leaderboard-container h2 {
+    font-size: 32px;
+    margin-bottom: 15px;
+    color: #666;
+    text-align: center;
+}
+
+#leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #888;
+    font-size: 18px;
+}
+
+#leaderboard-table tbody {
+    transition: opacity 0.3s ease;
+}
+
+#leaderboard-table thead {
+    border-bottom: 2px solid #ccc;
+}
+
+#leaderboard-table th {
+    padding: 8px 12px;
+    text-align: left;
+    color: #666;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+#leaderboard-table th:first-child {
+    width: 15%;
+    text-align: center;
+}
+
+#leaderboard-table th:nth-child(2) {
+    width: 50%;
+}
+
+#leaderboard-table th:last-child {
+    width: 35%;
+    text-align: right;
+}
+
+#leaderboard-table tbody tr {
+    border-bottom: 1px solid #ddd;
+}
+
+#leaderboard-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+#leaderboard-table td {
+    padding: 6px 12px;
+    color: #888;
+    font-size: 16px;
+}
+
+#leaderboard-table td:first-child {
+    text-align: center;
+}
+
+#leaderboard-table td:last-child {
+    text-align: right;
+}
+
 .screen.hidden {
     display: none;
 }
@@ -128,6 +212,59 @@ body {
     height: 30px;
 }
 
+#score-submit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+    margin: 20px 0;
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.username-input {
+    font-family: 'Tiny5', monospace;
+    font-size: 18px;
+    padding: 10px 15px;
+    border: 2px solid rgba(245, 245, 220, 0.9);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #000;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.username-input:focus {
+    outline: none;
+    border-color: #ff0000;
+    background: rgba(255, 255, 255, 1);
+}
+
+.username-input::placeholder {
+    color: #888;
+}
+
+.submit-message {
+    font-size: 16px;
+    padding: 8px 15px;
+    border-radius: 5px;
+    text-align: center;
+    margin-top: 10px;
+    min-height: 20px;
+}
+
+.submit-message.success {
+    color: #00aa00;
+    background: rgba(0, 170, 0, 0.1);
+}
+
+.submit-message.error {
+    color: #ff0000;
+    background: rgba(255, 0, 0, 0.1);
+}
+
 .button-container {
     display: flex;
     gap: 20px;
@@ -154,6 +291,17 @@ body {
 
 .game-button:active {
     transform: scale(0.95);
+}
+
+.game-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.game-button:disabled:hover {
+    background: rgba(245, 245, 220, 0.8);
+    transform: none;
 }
 
 #difficulty-selector {
@@ -261,6 +409,35 @@ body {
 
 /* Mobile responsiveness */
 @media (max-width: 1024px) {
+    #start-screen-content {
+        flex-direction: column;
+        gap: 30px;
+        align-items: center;
+    }
+
+    #leaderboard-container {
+        min-width: 250px;
+        max-width: 300px;
+    }
+
+    #leaderboard-container h2 {
+        font-size: 24px;
+    }
+
+    #leaderboard-table {
+        font-size: 14px;
+    }
+
+    #leaderboard-table th {
+        font-size: 14px;
+        padding: 6px 8px;
+    }
+
+    #leaderboard-table td {
+        font-size: 14px;
+        padding: 4px 8px;
+    }
+
     #instructions {
         bottom: 15px;
         padding: 0 15px;
@@ -289,9 +466,46 @@ body {
     .screen p {
         font-size: 20px;
     }
+
+    #score-submit-container {
+        max-width: 280px;
+    }
+
+    .username-input {
+        font-size: 16px;
+    }
 }
 
 @media (max-width: 768px) {
+    #start-screen-content {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    #leaderboard-container {
+        min-width: 200px;
+        max-width: 250px;
+    }
+
+    #leaderboard-container h2 {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    #leaderboard-table {
+        font-size: 12px;
+    }
+
+    #leaderboard-table th {
+        font-size: 12px;
+        padding: 4px 6px;
+    }
+
+    #leaderboard-table td {
+        font-size: 12px;
+        padding: 3px 6px;
+    }
+
     #instructions {
         bottom: 10px;
         padding: 0 10px;
@@ -338,6 +552,20 @@ body {
     .game-button {
         font-size: 18px;
         padding: 10px 20px;
+    }
+
+    #score-submit-container {
+        max-width: 250px;
+    }
+
+    .username-input {
+        font-size: 16px;
+        padding: 8px 12px;
+    }
+
+    .submit-message {
+        font-size: 14px;
+        padding: 6px 12px;
     }
 }
 
