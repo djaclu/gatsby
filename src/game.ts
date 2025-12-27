@@ -51,7 +51,7 @@ const JUMP_STRENGTH = -Math.sqrt(
 const DEBUG = false;
 
 // Game state
-export enum GameState {
+enum GameState {
   START,
   PLAYING,
   GAME_OVER_ANIMATING,
@@ -131,9 +131,9 @@ export class Game {
   private backgroundMusic: HTMLAudioElement | null = null;
   private isMusicOn: boolean = false;
   private selectedMenuOption: "difficulty" | "music" = "difficulty";
-  leaderboardEntries: { username: string; score: number }[] = [];
+  private leaderboardEntries: { username: string; score: number }[] = [];
   private leaderboardScrollInterval: number | null = null;
-  currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
+  private currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
   private username: string = ""; // Store username for score submission
 
   constructor() {
@@ -726,15 +726,9 @@ export class Game {
 
   private async initializeLeaderboard(): Promise<void> {
     try {
-      const difficultyName = DifficultyLevel[this.difficulty].toLowerCase();
-      console.log(
-        "Fetching leaderboard from API for difficulty:",
-        difficultyName
-      );
-      // Fetch leaderboard from API with difficulty filter
-      const response = await fetch(
-        `/api/leaderboard?difficulty=${difficultyName}`
-      );
+      console.log("Fetching leaderboard from API...");
+      // Fetch leaderboard from API
+      const response = await fetch("/api/leaderboard");
       console.log("Leaderboard API response status:", response.status);
 
       if (response.ok) {
@@ -847,7 +841,7 @@ export class Game {
     this.leaderboardEntries.sort((a, b) => b.score - a.score);
   }
 
-  displayLeaderboardRange(range: number): void {
+  private displayLeaderboardRange(range: number): void {
     const leaderboardBody = document.getElementById("leaderboard-body");
     if (!leaderboardBody) return;
 
@@ -901,7 +895,7 @@ export class Game {
     }, 150);
   }
 
-  startLeaderboardAutoScroll(): void {
+  private startLeaderboardAutoScroll(): void {
     // Only autoscroll if there are more than 10 scores
     if (this.leaderboardEntries.length <= 10) {
       return;
@@ -986,12 +980,7 @@ export class Game {
 
     try {
       // Submit score (API handles replacing if username exists)
-      // Include difficulty level in the submission
-      const result = await this.submitScore(
-        sanitizedUsername,
-        this.score,
-        this.difficulty
-      );
+      const result = await this.submitScore(sanitizedUsername, this.score);
 
       if (result.success) {
         // Save username for future games
@@ -1037,22 +1026,16 @@ export class Game {
 
   private async submitScore(
     username: string,
-    score: number,
-    difficulty: DifficultyLevel
+    score: number
   ): Promise<{ success: boolean; message?: string }> {
     try {
-      const difficultyName = DifficultyLevel[difficulty].toLowerCase();
-      console.log("Submitting score:", {
-        username,
-        score,
-        difficulty: difficultyName,
-      });
+      console.log("Submitting score:", { username, score });
       const response = await fetch("/api/submit-score", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, score, difficulty: difficultyName }),
+        body: JSON.stringify({ username, score }),
       });
 
       console.log("Response status:", response.status, response.statusText);
@@ -1116,13 +1099,10 @@ export class Game {
     }
   }
 
-  async refreshLeaderboard(): Promise<void> {
+  private async refreshLeaderboard(): Promise<void> {
     try {
-      const difficultyName = DifficultyLevel[this.difficulty].toLowerCase();
-      console.log("Refreshing leaderboard for difficulty:", difficultyName);
-      const response = await fetch(
-        `/api/leaderboard?difficulty=${difficultyName}`
-      );
+      console.log("Refreshing leaderboard...");
+      const response = await fetch("/api/leaderboard");
       if (response.ok) {
         const data = await response.json();
         this.leaderboardEntries = data.entries || [];

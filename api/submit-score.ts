@@ -21,7 +21,6 @@ function getRedisClient() {
 interface SubmitScoreRequest {
   username: string;
   score: number;
-  difficulty?: string; // "easy", "medium", or "hard"
 }
 
 // Helper function to read request body
@@ -129,19 +128,6 @@ export default async function handler(
       return;
     }
 
-    // Get difficulty (default to "medium" if not provided)
-    const difficulty = (body.difficulty || "medium").toLowerCase();
-    if (!["easy", "medium", "hard"].includes(difficulty)) {
-      res.statusCode = 400;
-      res.setHeader("Content-Type", "application/json");
-      res.end(
-        JSON.stringify({
-          error: "Invalid difficulty. Must be 'easy', 'medium', or 'hard'",
-        })
-      );
-      return;
-    }
-
     // Check if user already exists using REST API
     const url =
       process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -152,9 +138,6 @@ export default async function handler(
       throw new Error("Redis REST API credentials not found");
     }
 
-    // Use difficulty-specific leaderboard key
-    const leaderboardKey = `leaderboard:${difficulty}`;
-
     let existingScore: number | null = null;
     try {
       const scoreResponse = await fetch(url, {
@@ -163,7 +146,7 @@ export default async function handler(
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(["ZSCORE", leaderboardKey, username]),
+        body: JSON.stringify(["ZSCORE", "leaderboard", username]),
       });
 
       if (scoreResponse.ok) {
@@ -217,7 +200,7 @@ export default async function handler(
           },
           body: JSON.stringify([
             "ZADD",
-            leaderboardKey,
+            "leaderboard",
             body.score.toString(),
             username,
           ]),
@@ -256,7 +239,7 @@ export default async function handler(
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(["ZSCORE", leaderboardKey, username]),
+            body: JSON.stringify(["ZSCORE", "leaderboard", username]),
           });
           if (verifyResponse.ok) {
             const verifyResult = await verifyResponse.text();
@@ -275,12 +258,12 @@ export default async function handler(
         // Fallback to library method if REST API fails
         const redisAny = redis as any;
         if (typeof redisAny.zAdd === "function") {
-          await redisAny.zAdd(leaderboardKey, {
+          await redisAny.zAdd("leaderboard", {
             score: body.score,
             member: username,
           });
         } else if (typeof redisAny.zadd === "function") {
-          await redisAny.zadd(leaderboardKey, body.score, username);
+          await redisAny.zadd("leaderboard", body.score, username);
         } else {
           throw restError;
         }
@@ -296,7 +279,7 @@ export default async function handler(
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(["ZREVRANK", leaderboardKey, username]),
+          body: JSON.stringify(["ZREVRANK", "leaderboard", username]),
         });
 
         if (rankResponse.ok) {
@@ -352,7 +335,7 @@ export default async function handler(
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(["ZREVRANK", leaderboardKey, username]),
+          body: JSON.stringify(["ZREVRANK", "leaderboard", username]),
         });
 
         if (rankResponse.ok) {
