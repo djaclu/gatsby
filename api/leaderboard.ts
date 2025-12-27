@@ -1,5 +1,4 @@
 import { Redis } from "@upstash/redis";
-import type { Redis as RedisType } from "@upstash/redis";
 
 // Initialize Redis - reads from environment variables automatically
 // Upstash provides KV_REST_API_URL and KV_REST_API_TOKEN
