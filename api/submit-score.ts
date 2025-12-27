@@ -150,11 +150,35 @@ export default async function handler(
       });
 
       if (scoreResponse.ok) {
-        const scoreResult = await scoreResponse.json();
-        existingScore =
-          scoreResult !== null && scoreResult !== undefined
-            ? Number(scoreResult)
-            : null;
+        const scoreResultText = await scoreResponse.text();
+        console.log("ZSCORE REST API raw response:", scoreResultText);
+        let scoreResult;
+        try {
+          scoreResult = JSON.parse(scoreResultText);
+          // Upstash REST API wraps result in { result: value }
+          if (
+            scoreResult &&
+            typeof scoreResult === "object" &&
+            "result" in scoreResult
+          ) {
+            scoreResult = scoreResult.result;
+          }
+          console.log("ZSCORE parsed result:", scoreResult);
+          existingScore =
+            scoreResult !== null &&
+            scoreResult !== undefined &&
+            scoreResult !== ""
+              ? Number(scoreResult)
+              : null;
+          // Check if it's a valid number
+          if (existingScore !== null && isNaN(existingScore)) {
+            existingScore = null;
+          }
+        } catch (parseError) {
+          console.error("Failed to parse ZSCORE response:", parseError);
+          existingScore = null;
+        }
+        console.log("Existing score for", username, ":", existingScore);
       }
     } catch (scoreError) {
       console.error("Failed to check existing score:", scoreError);
@@ -259,11 +283,29 @@ export default async function handler(
         });
 
         if (rankResponse.ok) {
-          const rankResult = await rankResponse.json();
-          rank =
-            rankResult !== null && rankResult !== undefined
-              ? Number(rankResult)
-              : null;
+          const rankResultText = await rankResponse.text();
+          let rankResult;
+          try {
+            rankResult = JSON.parse(rankResultText);
+            // Upstash REST API wraps result in { result: value }
+            if (
+              rankResult &&
+              typeof rankResult === "object" &&
+              "result" in rankResult
+            ) {
+              rankResult = rankResult.result;
+            }
+            rank =
+              rankResult !== null && rankResult !== undefined
+                ? Number(rankResult)
+                : null;
+            if (rank !== null && isNaN(rank)) {
+              rank = null;
+            }
+          } catch (parseError) {
+            console.error("Failed to parse ZREVRANK response:", parseError);
+            rank = null;
+          }
         }
       } catch (rankError) {
         console.error("Failed to get rank:", rankError);
@@ -297,11 +339,29 @@ export default async function handler(
         });
 
         if (rankResponse.ok) {
-          const rankResult = await rankResponse.json();
-          rank =
-            rankResult !== null && rankResult !== undefined
-              ? Number(rankResult)
-              : null;
+          const rankResultText = await rankResponse.text();
+          let rankResult;
+          try {
+            rankResult = JSON.parse(rankResultText);
+            // Upstash REST API wraps result in { result: value }
+            if (
+              rankResult &&
+              typeof rankResult === "object" &&
+              "result" in rankResult
+            ) {
+              rankResult = rankResult.result;
+            }
+            rank =
+              rankResult !== null && rankResult !== undefined
+                ? Number(rankResult)
+                : null;
+            if (rank !== null && isNaN(rank)) {
+              rank = null;
+            }
+          } catch (parseError) {
+            console.error("Failed to parse ZREVRANK response:", parseError);
+            rank = null;
+          }
         }
       } catch (rankError) {
         console.error("Failed to get rank:", rankError);
