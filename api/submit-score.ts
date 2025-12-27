@@ -128,34 +128,43 @@ export default async function handler(
       return;
     }
 
-    // Check if user already exists
-    const redisAny = redis as any;
+    // Check if user already exists using REST API
+    const url =
+      process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const token =
+      process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (!url || !token) {
+      throw new Error("Redis REST API credentials not found");
+    }
+
     let existingScore: number | null = null;
-    if (typeof redisAny.zscore === "function") {
-      existingScore = await redisAny.zscore("leaderboard", username);
-    } else if (typeof redisAny.zScore === "function") {
-      existingScore = await redisAny.zScore("leaderboard", username);
-    } else {
-      const result = await redisAny.sendCommand([
-        "ZSCORE",
-        "leaderboard",
-        username,
-      ]);
-      existingScore = result ? Number(result) : null;
+    try {
+      const scoreResponse = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["ZSCORE", "leaderboard", username]),
+      });
+
+      if (scoreResponse.ok) {
+        const scoreResult = await scoreResponse.json();
+        existingScore =
+          scoreResult !== null && scoreResult !== undefined
+            ? Number(scoreResult)
+            : null;
+      }
+    } catch (scoreError) {
+      console.error("Failed to check existing score:", scoreError);
+      // Continue - assume no existing score
     }
 
     // If user exists and new score is higher, or user doesn't exist, update the score
     if (existingScore === null || body.score > existingScore) {
       // Add/update the score in the sorted set
       // Use Upstash REST API directly to bypass library validation issues
-      const url =
-        process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-      const token =
-        process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-
-      if (!url || !token) {
-        throw new Error("Redis REST API credentials not found");
-      }
 
       try {
         // Upstash REST API format: POST to URL with command array in body
@@ -198,18 +207,28 @@ export default async function handler(
       }
 
       // Get the new rank (position) of the user (0-indexed, descending order)
+      // Use REST API to get rank
       let rank: number | null = null;
-      if (typeof redisAny.zrevrank === "function") {
-        rank = await redisAny.zrevrank("leaderboard", username);
-      } else if (typeof redisAny.zRank === "function") {
-        rank = await redisAny.zRank("leaderboard", username, { rev: true });
-      } else {
-        const result = await redisAny.sendCommand([
-          "ZREVRANK",
-          "leaderboard",
-          username,
-        ]);
-        rank = result !== null ? Number(result) : null;
+      try {
+        const rankResponse = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(["ZREVRANK", "leaderboard", username]),
+        });
+
+        if (rankResponse.ok) {
+          const rankResult = await rankResponse.json();
+          rank =
+            rankResult !== null && rankResult !== undefined
+              ? Number(rankResult)
+              : null;
+        }
+      } catch (rankError) {
+        console.error("Failed to get rank:", rankError);
+        // Continue without rank - it's not critical
       }
 
       res.statusCode = 200;
@@ -226,18 +245,28 @@ export default async function handler(
       return;
     } else {
       // Score is not higher, return existing score info
+      // Get rank using REST API
       let rank: number | null = null;
-      if (typeof redisAny.zrevrank === "function") {
-        rank = await redisAny.zrevrank("leaderboard", username);
-      } else if (typeof redisAny.zRank === "function") {
-        rank = await redisAny.zRank("leaderboard", username, { rev: true });
-      } else {
-        const result = await redisAny.sendCommand([
-          "ZREVRANK",
-          "leaderboard",
-          username,
-        ]);
-        rank = result !== null ? Number(result) : null;
+      try {
+        const rankResponse = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(["ZREVRANK", "leaderboard", username]),
+        });
+
+        if (rankResponse.ok) {
+          const rankResult = await rankResponse.json();
+          rank =
+            rankResult !== null && rankResult !== undefined
+              ? Number(rankResult)
+              : null;
+        }
+      } catch (rankError) {
+        console.error("Failed to get rank:", rankError);
+        // Continue without rank - it's not critical
       }
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
