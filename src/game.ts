@@ -133,14 +133,26 @@ export class Game {
   private selectedMenuOption: "difficulty" | "music" = "difficulty";
   private leaderboardEntries: { username: string; score: number }[] = [];
   private leaderboardScrollInterval: number | null = null;
-  private currentLeaderboardRange: number = 0; // 0-based index for which set of 10 scores to show
+  private currentLeaderboardIndex: number = 0; // Current position in leaderboard (0-24, showing 5 at a time)
+  private displayedRows: HTMLTableRowElement[] = []; // Track displayed rows for smooth removal
   private username: string = ""; // Store username for score submission
+  private landscapeWarning: HTMLElement;
+  private closeLandscapeWarningBtn: HTMLButtonElement;
+  private isGamePausedForOrientation: boolean = false;
+  private firstTimeTutorial: HTMLElement;
+  private closeTutorialBtn: HTMLButtonElement;
 
   constructor() {
     this.canvas = document.getElementById("gameCanvas") as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d")!;
     this.setupCanvasSize();
-    window.addEventListener("resize", () => this.setupCanvasSize());
+    window.addEventListener("resize", () => {
+      this.setupCanvasSize();
+      this.updateInstructionsVisibility();
+    });
+
+    // Initial check for instructions visibility
+    this.updateInstructionsVisibility();
 
     // Load UI elements
     this.startScreen = document.getElementById("start-screen")!;
@@ -170,12 +182,35 @@ export class Game {
       "submit-score-btn"
     ) as HTMLButtonElement;
     this.submitMessage = document.getElementById("submit-message")!;
+    this.landscapeWarning = document.getElementById("landscape-warning")!;
+    this.closeLandscapeWarningBtn = document.getElementById(
+      "close-landscape-warning"
+    ) as HTMLButtonElement;
+    this.firstTimeTutorial = document.getElementById("first-time-tutorial")!;
+    this.closeTutorialBtn = document.getElementById(
+      "close-tutorial"
+    ) as HTMLButtonElement;
+
+    // Initialize settings window
+    const menuIcon = document.getElementById("menu-icon") as HTMLButtonElement;
+    const settingsWindow = document.getElementById("settings-window")!;
+
+    menuIcon.addEventListener("click", () => {
+      settingsWindow.classList.toggle("hidden");
+    });
+
+    // Close settings when clicking outside
+    settingsWindow.addEventListener("click", (e) => {
+      if (e.target === settingsWindow) {
+        settingsWindow.classList.add("hidden");
+      }
+    });
 
     // Initialize difficulty display
     this.difficultyText.textContent = DifficultyLevel[this.difficulty];
 
-    // Show instructions on start screen
-    this.instructions.classList.remove("hidden");
+    // Instructions should only show during gameplay, not on start screen
+    this.instructions.classList.add("hidden");
 
     // Initialize leaderboard with placeholder data
     this.initializeLeaderboard();
@@ -214,6 +249,41 @@ export class Game {
 
     // Load font
     this.loadFont();
+
+    // Setup landscape warning
+    this.closeLandscapeWarningBtn.addEventListener("click", () => {
+      this.landscapeWarning.classList.add("hidden");
+      if (this.isGamePausedForOrientation) {
+        // Check orientation again when closing
+        const isMobile = window.innerWidth <= 768;
+        const isPortrait = window.innerHeight > window.innerWidth;
+        if (!isPortrait || !isMobile) {
+          this.isGamePausedForOrientation = false;
+          this.startGame(); // Start the game
+        }
+      }
+    });
+
+    // Listen for orientation changes
+    window.addEventListener("orientationchange", () => {
+      setTimeout(() => {
+        if (this.isGamePausedForOrientation) {
+          const isMobile = window.innerWidth <= 768;
+          const isPortrait = window.innerHeight > window.innerWidth;
+          if (!isPortrait || !isMobile) {
+            this.landscapeWarning.classList.add("hidden");
+            this.isGamePausedForOrientation = false;
+            this.startGame(); // Start the game
+          }
+        }
+      }, 100);
+    });
+
+    // Check for first-time user and show tutorial
+    this.checkFirstTimeUser();
+
+    // Check for first-time user and show tutorial
+    this.checkFirstTimeUser();
 
     // Setup event listeners
     this.setupEventListeners();
@@ -594,6 +664,23 @@ export class Game {
   private startGame(): void {
     // Stop leaderboard auto-scroll when game starts
     this.stopLeaderboardAutoScroll();
+    
+    // Check if mobile and in portrait orientation
+    const isMobile = window.innerWidth <= 768;
+    const isPortrait = window.innerHeight > window.innerWidth;
+    
+    if (isMobile && isPortrait) {
+      // Pause game and show landscape warning
+      this.isGamePausedForOrientation = true;
+      this.state = GameState.START; // Keep in START state until orientation is correct
+      this.landscapeWarning.classList.remove("hidden");
+      return;
+    }
+    
+    // If warning was showing, hide it
+    this.landscapeWarning.classList.add("hidden");
+    this.isGamePausedForOrientation = false;
+    
     this.state = GameState.PLAYING;
     this.startScreen.classList.add("hidden");
     this.instructions.classList.add("hidden");
@@ -611,15 +698,15 @@ export class Game {
     this.state = GameState.START;
     this.gameOverScreen.classList.add("hidden");
     this.startScreen.classList.remove("hidden");
-    this.instructions.classList.remove("hidden");
+    this.instructions.classList.add("hidden");
     this.topUIContainer.classList.add("hidden");
     this.resetGame();
     // Refresh and restart leaderboard auto-scroll when returning to start screen
     this.refreshLeaderboard().then(() => {
-      this.currentLeaderboardRange = 0;
-      this.displayLeaderboardRange(0);
-      // Only autoscroll if there are more than 10 entries
-      if (this.leaderboardEntries.length > 10) {
+      this.currentLeaderboardIndex = 0;
+      this.displayTopTen();
+      // Only autoscroll if there are more than 5 entries
+      if (this.leaderboardEntries.length > 5) {
         this.startLeaderboardAutoScroll();
       }
     });
@@ -752,6 +839,8 @@ export class Game {
 
         if (this.leaderboardEntries.length === 0) {
           console.log("Leaderboard is empty - no scores yet");
+          console.log("Using placeholder leaderboard values");
+          this.loadPlaceholderLeaderboard();
         } else {
           console.log(
             `Loaded ${this.leaderboardEntries.length} entries from database`
@@ -779,55 +868,30 @@ export class Game {
           errorText = `HTTP ${response.status}: ${response.statusText}`;
         }
         console.error("Leaderboard API error:", response.status, errorText);
+        console.log("Using placeholder leaderboard values due to error");
 
-        // Check if it's a configuration error
-        if (
-          errorText.includes("Redis configuration missing") ||
-          errorText.includes("UPSTASH")
-        ) {
-          console.warn("Redis not configured - using placeholder data");
-          this.loadPlaceholderLeaderboard();
-        } else if (response.status === 404) {
-          console.warn("API endpoint not found - using placeholder data");
-          this.loadPlaceholderLeaderboard();
-        } else {
-          // For other errors, show empty leaderboard
-          this.leaderboardEntries = [];
-        }
-        // Only use placeholders if we can't connect to the API
-        // If API returns empty, we should show empty leaderboard
-        if (response.status === 404) {
-          console.warn("API endpoint not found - using placeholder data");
-          this.loadPlaceholderLeaderboard();
-        } else {
-          // For other errors, try to show empty or use placeholders
-          this.leaderboardEntries = [];
-        }
+        // Use placeholder data for any error
+        this.loadPlaceholderLeaderboard();
       }
     } catch (error) {
       console.error("Failed to fetch leaderboard:", error);
-      // Only use placeholders if it's a network/connection error
-      // Check if it's a fetch error (API not available)
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        console.warn("API not available - using placeholder data");
-        this.loadPlaceholderLeaderboard();
-      } else {
-        // For other errors, show empty leaderboard
-        this.leaderboardEntries = [];
-      }
+      console.log("Using placeholder leaderboard values due to fetch error");
+      // Use placeholder data for any error
+      this.loadPlaceholderLeaderboard();
     }
 
-    // Display top 10 by default (or empty if no data)
-    this.currentLeaderboardRange = 0;
-    this.displayLeaderboardRange(0);
+    // Display top 5 by default (or empty if no data)
+    this.currentLeaderboardIndex = 0;
+    this.displayTopTen();
 
-    // Start auto-scrolling (only if we have more than 10 entries)
-    if (this.leaderboardEntries.length > 10) {
+    // Start auto-scrolling (only if we have more than 5 entries)
+    if (this.leaderboardEntries.length > 5) {
       this.startLeaderboardAutoScroll();
     }
   }
 
   private loadPlaceholderLeaderboard(): void {
+    console.log("Loading placeholder leaderboard data");
     // Generate placeholder data for top 25 scores
     this.leaderboardEntries = [];
     for (let i = 1; i <= 25; i++) {
@@ -839,15 +903,23 @@ export class Game {
 
     // Sort by score descending
     this.leaderboardEntries.sort((a, b) => b.score - a.score);
+    console.log(
+      `Generated ${this.leaderboardEntries.length} placeholder entries`
+    );
   }
 
-  private displayLeaderboardRange(range: number): void {
+  private displayTopTen(): void {
+    this.displayLeaderboardGroup(0);
+  }
+
+  private displayLeaderboardGroup(groupIndex: number): void {
     const leaderboardBody = document.getElementById("leaderboard-body");
     if (!leaderboardBody) return;
 
     // If no entries, show empty state
     if (this.leaderboardEntries.length === 0) {
       leaderboardBody.innerHTML = "";
+      this.displayedRows = [];
       const row = document.createElement("tr");
       const emptyCell = document.createElement("td");
       emptyCell.colSpan = 3;
@@ -860,39 +932,124 @@ export class Game {
       return;
     }
 
-    // Show 10 scores per scroll
-    const scoresPerPage = 10;
-    const startIndex = range * scoresPerPage;
+    // Calculate the group of 10 scores (1-10, 11-20, 21-30, etc.)
+    const groupSize = 10;
+    const startIndex = groupIndex * groupSize;
     const endIndex = Math.min(
-      startIndex + scoresPerPage,
+      startIndex + groupSize,
       this.leaderboardEntries.length
     );
-
-    // Get entries for this range
     const entriesToShow = this.leaderboardEntries.slice(startIndex, endIndex);
 
-    // Fade out, update, fade in
+    // Fade out existing content
     leaderboardBody.style.opacity = "0";
+    leaderboardBody.style.transform = "translateY(-10px)";
+    leaderboardBody.style.transition = "opacity 0.5s ease, transform 0.5s ease";
+
     setTimeout(() => {
-      // Populate table
+      // Clear existing rows
       leaderboardBody.innerHTML = "";
-      entriesToShow.forEach((entry, index) => {
-        const row = document.createElement("tr");
-        const positionCell = document.createElement("td");
-        positionCell.textContent = (startIndex + index + 1).toString();
-        const usernameCell = document.createElement("td");
-        usernameCell.textContent = entry.username || "Unknown";
-        const scoreCell = document.createElement("td");
-        // Ensure score is a valid number before calling toLocaleString
-        const score = entry.score != null ? Number(entry.score) : 0;
-        scoreCell.textContent = isNaN(score) ? "0" : score.toLocaleString();
-        row.appendChild(positionCell);
-        row.appendChild(usernameCell);
-        row.appendChild(scoreCell);
+      this.displayedRows = [];
+
+      // Always show exactly 10 rows
+      for (let i = 0; i < groupSize; i++) {
+        const position = startIndex + i + 1;
+        let row: HTMLTableRowElement;
+
+        if (i < entriesToShow.length) {
+          // Show actual entry
+          row = this.createLeaderboardRow(entriesToShow[i], position);
+        } else {
+          // Fill with empty row
+          row = this.createEmptyLeaderboardRow(position);
+        }
+
         leaderboardBody.appendChild(row);
+        this.displayedRows.push(row);
+      }
+
+      // Fade in new content
+      requestAnimationFrame(() => {
+        leaderboardBody.style.opacity = "1";
+        leaderboardBody.style.transform = "translateY(0)";
       });
-      leaderboardBody.style.opacity = "1";
-    }, 150);
+    }, 500);
+  }
+
+  private createEmptyLeaderboardRow(position: number): HTMLTableRowElement {
+    const row = document.createElement("tr");
+    row.style.opacity = "0.3"; // Make empty rows semi-transparent
+
+    const positionCell = document.createElement("td");
+    positionCell.textContent = position.toString();
+    const usernameCell = document.createElement("td");
+    usernameCell.textContent = "—";
+    const scoreCell = document.createElement("td");
+    scoreCell.textContent = "—";
+
+    row.appendChild(positionCell);
+    row.appendChild(usernameCell);
+    row.appendChild(scoreCell);
+
+    return row;
+  }
+
+  private createLeaderboardRow(
+    entry: { username: string; score: number },
+    position: number
+  ): HTMLTableRowElement {
+    const row = document.createElement("tr");
+
+    // Get current player's username from localStorage
+    const currentPlayerUsername =
+      localStorage.getItem("gatsbys-username") || this.username;
+    const isCurrentPlayer =
+      currentPlayerUsername &&
+      entry.username &&
+      entry.username.toLowerCase() === currentPlayerUsername.toLowerCase();
+
+    // If this is the current player's score, add bold styling
+    if (isCurrentPlayer) {
+      row.style.fontWeight = "bold";
+      row.style.color = "#000";
+    }
+
+    const positionCell = document.createElement("td");
+    positionCell.textContent = position.toString();
+    const usernameCell = document.createElement("td");
+    usernameCell.textContent = entry.username || "Unknown";
+    const scoreCell = document.createElement("td");
+    const score = entry.score != null ? Number(entry.score) : 0;
+    scoreCell.textContent = isNaN(score) ? "0" : score.toLocaleString();
+
+    row.appendChild(positionCell);
+    row.appendChild(usernameCell);
+    row.appendChild(scoreCell);
+
+    return row;
+  }
+
+  private scrollToNextScore(): void {
+    if (this.leaderboardEntries.length === 0) return;
+
+    // Move to next group of 10
+    // Group 0: positions 1-10
+    // Group 1: positions 11-20
+    // Group 2: positions 21-30
+    this.currentLeaderboardIndex++;
+
+    // Calculate maximum group index (for 25 entries, we have 3 groups: 0-2)
+    const groupSize = 10;
+    const maxGroupIndex =
+      Math.ceil(this.leaderboardEntries.length / groupSize) - 1;
+
+    // If we've reached the end, reset to beginning
+    if (this.currentLeaderboardIndex > maxGroupIndex) {
+      this.currentLeaderboardIndex = 0;
+    }
+
+    // Display the group with smooth transition
+    this.displayLeaderboardGroup(this.currentLeaderboardIndex);
   }
 
   private startLeaderboardAutoScroll(): void {
@@ -906,19 +1063,10 @@ export class Game {
       clearInterval(this.leaderboardScrollInterval);
     }
 
-    // Calculate number of pages (each page shows 10 scores)
-    const scoresPerPage = 10;
-    const totalPages = Math.ceil(
-      this.leaderboardEntries.length / scoresPerPage
-    );
-
-    // Auto-scroll every 3 seconds
+    // Auto-scroll every 4 seconds to reveal next group
     this.leaderboardScrollInterval = window.setInterval(() => {
-      // Cycle through ranges: 0 -> 1 -> 2 -> 0
-      this.currentLeaderboardRange =
-        (this.currentLeaderboardRange + 1) % totalPages;
-      this.displayLeaderboardRange(this.currentLeaderboardRange);
-    }, 3000);
+      this.scrollToNextScore();
+    }, 4000);
   }
 
   private stopLeaderboardAutoScroll(): void {
@@ -1112,11 +1260,11 @@ export class Game {
 
         // Update display if we're on the start screen
         if (this.state === GameState.START) {
-          this.currentLeaderboardRange = 0;
-          this.displayLeaderboardRange(0);
+          this.currentLeaderboardIndex = 0;
+          this.displayTopTen();
 
-          // Restart auto-scroll if we have more than 10 entries
-          if (this.leaderboardEntries.length > 10) {
+          // Restart auto-scroll if we have more than 5 entries
+          if (this.leaderboardEntries.length > 5) {
             this.startLeaderboardAutoScroll();
           }
         }
@@ -1744,6 +1892,48 @@ export class Game {
         this.difficultySelector.classList.remove("selected");
         this.musicSelector.classList.add("selected");
       }
+    }
+  }
+
+  private updateInstructionsVisibility(): void {
+    // Check window width to determine if mobile or desktop
+    // This ensures instructions update when window is resized
+    const isMobile = window.innerWidth <= 768;
+
+    // The CSS media queries handle the actual display,
+    // but we can add a class to help with any additional logic if needed
+    if (this.instructions) {
+      if (isMobile) {
+        this.instructions.classList.add("mobile-view");
+        this.instructions.classList.remove("desktop-view");
+      } else {
+        this.instructions.classList.add("desktop-view");
+        this.instructions.classList.remove("mobile-view");
+      }
+    }
+  }
+
+  private checkFirstTimeUser(): void {
+    const hasSeenTutorial = localStorage.getItem("gatsbys-world-tutorial-seen");
+    
+    // Show tutorial if it hasn't been seen (null, undefined, or "false")
+    if (!hasSeenTutorial || hasSeenTutorial === "false") {
+      // Show tutorial after a short delay to ensure page is loaded
+      setTimeout(() => {
+        if (this.firstTimeTutorial) {
+          this.firstTimeTutorial.classList.remove("hidden");
+        }
+      }, 500);
+    }
+
+    // Close tutorial button
+    if (this.closeTutorialBtn) {
+      this.closeTutorialBtn.addEventListener("click", () => {
+        if (this.firstTimeTutorial) {
+          this.firstTimeTutorial.classList.add("hidden");
+        }
+        localStorage.setItem("gatsbys-world-tutorial-seen", "true");
+      });
     }
   }
 }

@@ -8,32 +8,75 @@
 </head>
 <body>
     <div id="game-container">
+        <button id="menu-icon" class="menu-icon" aria-label="Open settings">
+            <span class="menu-icon-line"></span>
+            <span class="menu-icon-line"></span>
+            <span class="menu-icon-line"></span>
+        </button>
+        <div id="settings-window" class="settings-window hidden">
+            <div class="settings-window-content">
+                <div class="settings-header">
+                    <h3>Settings</h3>
+                </div>
+                <div class="settings-body">
+                    <div id="difficulty-selector" class="menu-option selected">
+                        <label>Difficulty:</label>
+                        <div class="selector-controls">
+                            <span class="difficulty-arrow">◄</span>
+                            <span id="difficulty-text">Medium</span>
+                            <span class="difficulty-arrow">►</span>
+                        </div>
+                    </div>
+                    <div id="music-selector" class="menu-option">
+                        <label>Music:</label>
+                        <div class="selector-controls">
+                            <span class="difficulty-arrow">◄</span>
+                            <span id="music-text">off</span>
+                            <span class="difficulty-arrow">►</span>
+                        </div>
+                    </div>
+                    <div id="settings-instructions" class="menu-option">
+                        <label>Controls:</label>
+                        <div class="instructions-content">
+                            <div class="instruction-item desktop-only">
+                                <p>↑ Jump / Double Jump</p>
+                            </div>
+                            <div class="instruction-item desktop-only">
+                                <p>[ Space ] Bark</p>
+                            </div>
+                            <div class="instruction-item desktop-only">
+                                <p>← → Change Difficulty</p>
+                            </div>
+                            <div class="instruction-item mobile-only">
+                                <p>Tap Jump / Double Tap</p>
+                            </div>
+                            <div class="instruction-item mobile-only">
+                                <p>Swipe Right Bark</p>
+                            </div>
+                            <div class="instruction-item mobile-only">
+                                <p>Swipe ← → Difficulty</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <canvas id="gameCanvas"></canvas>
         <div id="start-screen" class="screen">
             <div id="start-screen-content">
                 <div id="start-screen-left">
                     <img src="/assets/Gatsby.png" alt="Gatsby" id="start-screen-image">
                     <h1>Gatsby's World</h1>
-                    <div id="difficulty-selector" class="menu-option selected">
-                        <span class="difficulty-arrow">◄</span>
-                        <span id="difficulty-text">Medium</span>
-                        <span class="difficulty-arrow">►</span>
-                    </div>
-                    <div id="music-selector" class="menu-option">
-                        <span class="difficulty-arrow">◄</span>
-                        <span id="music-text">off</span>
-                        <span class="difficulty-arrow">►</span>
-                    </div>
-                    <button id="start-btn" class="game-button">Start</button>
+                    <button id="start-btn" class="game-button">START</button>
                 </div>
                 <div id="leaderboard-container">
-                    <h2>Top Scores</h2>
+                    <h2>high scores</h2>
                     <table id="leaderboard-table">
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Username</th>
-                                <th>Score</th>
+                                <th>username</th>
+                                <th>score</th>
                             </tr>
                         </thead>
                         <tbody id="leaderboard-body">
@@ -44,23 +87,29 @@
             </div>
         </div>
         <div id="game-over-screen" class="screen hidden">
-            <img src="/assets/sadG.png" alt="Sad Gatsby" id="game-over-image">
-            <h1>Game Over</h1>
-            <p>Final Score: <span id="final-score">0</span></p>
-            <div id="score-submit-container">
-                <input 
-                    type="text" 
-                    id="username-input" 
-                    placeholder="Enter username" 
-                    maxlength="50"
-                    class="username-input"
-                />
-                <button id="submit-score-btn" class="game-button">Submit Score</button>
-            </div>
-            <div id="submit-message" class="submit-message hidden"></div>
-            <div class="button-container">
-                <button id="return-start-btn" class="game-button">Menu</button>
-                <button id="try-again-btn" class="game-button">Try Again</button>
+            <div id="game-over-layout">
+                <div id="game-over-left" class="game-over-column">
+                    <button id="return-start-btn" class="game-button">Menu</button>
+                </div>
+                <div id="game-over-center" class="game-over-column">
+                    <img src="/assets/sadG.png" alt="Sad Gatsby" id="game-over-image">
+                    <h1>GAME OVER</h1>
+                    <p>final score: <span id="final-score">0</span></p>
+                    <div id="score-submit-container">
+                        <input 
+                            type="text" 
+                            id="username-input" 
+                            placeholder="Enter username" 
+                            maxlength="50"
+                            class="username-input"
+                        />
+                        <button id="submit-score-btn" class="game-button">submit score</button>
+                    </div>
+                    <div id="submit-message" class="submit-message hidden"></div>
+                </div>
+                <div id="game-over-right" class="game-over-column">
+                    <button id="try-again-btn" class="game-button">Try Again</button>
+                </div>
             </div>
         </div>
         <div id="top-ui-container" class="hidden">
@@ -86,6 +135,26 @@
             </div>
             <div class="instruction-item mobile-only">
                 <p>Swipe ← → Difficulty</p>
+            </div>
+        </div>
+        <div id="landscape-warning" class="landscape-warning hidden">
+            <div class="landscape-warning-content">
+                <h2>Please Rotate Device</h2>
+                <p>This game requires landscape orientation.</p>
+                <p>Please rotate your device to landscape mode.</p>
+                <button id="close-landscape-warning" class="game-button">Continue</button>
+            </div>
+        </div>
+        <div id="first-time-tutorial" class="first-time-tutorial hidden">
+            <div class="tutorial-arrow"></div>
+            <div class="first-time-tutorial-content">
+                <p>tap the menu icon to:</p>
+                <ul>
+                    <li>turn on sound for amazing music</li>
+                    <li>change difficulty level</li>
+                    <li>view game controls</li>
+                </ul>
+                <button id="close-tutorial" class="game-button">Got it!</button>
             </div>
         </div>
     </div>

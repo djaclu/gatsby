@@ -29,6 +29,154 @@ body {
     overflow: hidden;
 }
 
+/* Menu Icon */
+.menu-icon {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    background: rgba(245, 245, 220, 0.9);
+    border: 2px solid #333;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    padding: 8px;
+    transition: background 0.2s ease;
+}
+
+.menu-icon:hover {
+    background: rgba(245, 245, 220, 1);
+}
+
+.menu-icon-line {
+    width: 100%;
+    height: 3px;
+    background: #333;
+    border-radius: 2px;
+    transition: transform 0.3s ease;
+}
+
+/* Settings Window */
+.settings-window {
+    position: absolute;
+    top: 70px;
+    right: 15px;
+    background: rgba(245, 245, 220, 0.98);
+    border: 2px solid #333;
+    border-radius: 10px;
+    z-index: 99;
+    min-width: 250px;
+    /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); */
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-window.hidden {
+    display: none;
+}
+
+.settings-window-content {
+    padding: 20px;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #333;
+    padding-bottom: 10px;
+}
+
+.settings-header h3 {
+    margin: 0;
+    font-size: 24px;
+    color: #333;
+    text-transform: lowercase;
+}
+
+.close-settings {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #333;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.close-settings:hover {
+    transform: scale(1.2);
+}
+
+.settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.settings-body .menu-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-body .menu-option label {
+    font-size: 16px;
+    color: #333;
+    font-weight: bold;
+    text-transform: lowercase;
+}
+
+.settings-body .selector-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 18px;
+}
+
+.settings-body .instructions-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 0;
+}
+
+.settings-body .instruction-item {
+    font-size: 13px;
+    color: #666;
+    padding: 0;
+    text-align: left;
+}
+
+.settings-body .instruction-item p {
+    margin: 0;
+    font-size: 13px;
+}
+
 #gameCanvas {
     position: absolute;
     top: 0;
@@ -42,13 +190,13 @@ body {
 
 .screen {
     position: absolute;
-    top: 50%;
+    top: 45%;
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
     /* background: rgba(255, 255, 255, 0.95); */
     color: black;
-    padding: 40px 60px;
+    padding: 25px 60px;
     border-radius: 10px;
     /* border: 3px solid #333; */
     /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); */
@@ -56,11 +204,61 @@ body {
     min-width: 500px;
 }
 
-#start-screen-content {
+#game-over-screen {
+    top: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px 60px 25px 60px;
+    max-height: 85vh;
+    overflow-y: visible;
+}
+
+#game-over-layout {
     display: flex;
-    gap: 60px;
+    gap: 40px;
     align-items: flex-start;
     justify-content: center;
+    width: 100%;
+}
+
+.game-over-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#game-over-left,
+#game-over-right {
+    flex: 0 0 auto;
+    min-width: 120px;
+    padding-top: 200px;
+}
+
+#game-over-center {
+    flex: 0 0 auto;
+    min-width: 300px;
+    text-align: center;
+}
+
+#game-over-screen #game-over-image {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#game-over-center h1 {
+    margin-bottom: 6px;
+}
+
+#game-over-center .game-button {
+    margin: 0;
+}
+
+#start-screen-content {
+    display: flex;
+    gap: 50px;
+    align-items: flex-start;
+    justify-content: center;
+    margin-top: -10px;
 }
 
 #start-screen-left {
@@ -72,13 +270,15 @@ body {
 #leaderboard-container {
     min-width: 300px;
     max-width: 350px;
+    /* border: 1px solid #000000; */
 }
 
 #leaderboard-container h2 {
-    font-size: 32px;
+    font-size: 18px;
     margin-bottom: 15px;
     color: #666;
     text-align: center;
+    /* color: #ff0000; */
 }
 
 #leaderboard-table {
@@ -90,6 +290,10 @@ body {
 
 #leaderboard-table tbody {
     transition: opacity 0.3s ease;
+}
+
+#leaderboard-table tbody tr {
+    transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
 #leaderboard-table thead {
@@ -145,31 +349,34 @@ body {
 }
 
 #start-screen-image {
-    width: 200px;
+    width: 180px;
     height: auto;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    margin-top: 25px;
     display: block;
     margin-left: auto;
     margin-right: auto;
 }
 
 #game-over-image {
-    width: 200px;
+    width: 160px;
     height: auto;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+    margin-top: 0;
     display: block;
     margin-left: auto;
     margin-right: auto;
 }
 
 .screen h1 {
-    font-size: 48px;
-    margin-bottom: 20px;
+    font-size: 40px;
+    margin-bottom: 6px;
+    white-space: nowrap;
 }
 
 .screen p {
-    font-size: 24px;
-    margin: 10px 0;
+    font-size: 20px;
+    margin: 5px 0;
 }
 
 #top-ui-container {
@@ -215,9 +422,9 @@ body {
 #score-submit-container {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 10px;
     align-items: center;
-    margin: 20px 0;
+    margin: 12px 0;
     max-width: 300px;
     margin-left: auto;
     margin-right: auto;
@@ -268,14 +475,31 @@ body {
 .button-container {
     display: flex;
     gap: 20px;
-    justify-content: center;
-    margin-top: 20px;
+    justify-content: space-between;
+    margin-top: 15px;
+    width: 100%;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+#return-start-btn {
+    order: 1;
+    flex: 0 0 auto;
+}
+
+#try-again-btn {
+    order: 2;
+    flex: 0 0 auto;
 }
 
 .game-button {
     font-family: 'Tiny5', monospace;
     font-size: 20px;
-    padding: 12px 24px;
+    padding: 10px 24px;
     background: rgba(245, 245, 220, 0.8); /* Beige cream with transparency */
     color: rgb(255, 0, 0);
     border: 2px solid rgba(245, 245, 220, 0.9); /* Beige cream border */
@@ -309,8 +533,16 @@ body {
     align-items: center;
     justify-content: center;
     gap: 15px;
-    margin-top: 20px;
-    font-size: 28px;
+    font-size: 24px;
+    padding: 5px 10px;
+}
+
+/* When inside settings window, use different layout */
+.settings-body #difficulty-selector,
+.settings-body #music-selector {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 #music-selector {
@@ -320,11 +552,14 @@ body {
     gap: 10px;
     font-size: 24px;
     color: black;
+    padding: 5px 10px;
 }
 
 #music-text {
-    font-size: 24px;
-    color: black;
+    font-size: 18px;
+    color: #ff0000;
+    font-weight: bold;
+    min-width: 100px;
     text-transform: lowercase;
 }
 
@@ -333,6 +568,7 @@ body {
     font-weight: bold;
     min-width: 100px;
     text-transform: lowercase;
+    font-size: 18px;
 }
 
 #music-selector {
@@ -340,14 +576,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    margin-top: 15px;
-    font-size: 28px;
-}
-
-#music-text {
-    color: #ff0000;
-    font-weight: bold;
-    min-width: 120px;
+    font-size: 18px;
 }
 
 .difficulty-arrow {
@@ -378,13 +607,9 @@ body {
     margin-top: 10px;
 }
 
-#start-btn {
-    margin-top: 30px;
-}
-
 #instructions {
     position: absolute;
-    bottom: 20px;
+    bottom: 5px;
     left: 0;
     right: 0;
     display: flex;
@@ -415,7 +640,7 @@ body {
 }
 
 .mobile-only {
-    display: none !important;
+    display: none;
 }
 
 .desktop-only {
@@ -423,78 +648,13 @@ body {
 }
 
 /* Mobile responsiveness */
-@media (max-width: 1024px) {
-    #start-screen-content {
-        flex-direction: column;
-        gap: 30px;
-        align-items: center;
-    }
-
-    #leaderboard-container {
-        min-width: 250px;
-        max-width: 300px;
-    }
-
-    #leaderboard-container h2 {
-        font-size: 24px;
-    }
-
-    #leaderboard-table {
-        font-size: 14px;
-    }
-
-    #leaderboard-table th {
-        font-size: 14px;
-        padding: 6px 8px;
-    }
-
-    #leaderboard-table td {
-        font-size: 14px;
-        padding: 4px 8px;
-    }
-
-    #instructions {
-        bottom: 15px;
-        padding: 0 15px;
-        gap: 8px;
-    }
-    
-    .instruction-item {
-        padding: 10px 12px;
-        font-size: 14px;
-    }
-    
-    .instruction-item p {
-        font-size: 14px;
-    }
-    
-    .screen {
-        min-width: 90%;
-        max-width: 500px;
-        padding: 30px 40px;
-    }
-    
-    .screen h1 {
-        font-size: 36px;
-    }
-    
-    .screen p {
-        font-size: 20px;
-    }
-
-    #score-submit-container {
-        max-width: 280px;
-    }
-
-    .username-input {
-        font-size: 16px;
-    }
-}
-
 @media (max-width: 768px) {
     #start-screen-content {
         flex-direction: column;
         gap: 20px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
     #leaderboard-container {
@@ -503,13 +663,12 @@ body {
     }
 
     #leaderboard-container h2 {
-        font-size: 20px;
+        font-size: 15px;
         margin-bottom: 10px;
     }
 
     #leaderboard-table {
         font-size: 12px;
-        color: #ff0000;
     }
 
     #leaderboard-table th {
@@ -542,23 +701,37 @@ body {
     }
     
     .mobile-only {
-        display: block;
+        display: block !important;
     }
     
     .desktop-only {
-        display: none;
+        display: none !important;
     }
     
     .screen {
-        padding: 20px 30px;
+        padding: 15px 15px;
+        min-width: 0;
+        max-width: 90vw;
+        width: auto;
+        box-sizing: border-box;
+        left: 50%;
+        right: auto;
+        transform: translate(-50%, -50%);
+        top: 45%;
     }
     
     .screen h1 {
         font-size: 32px;
+        white-space: nowrap;
     }
     
     #start-screen-image {
         width: 150px;
+    }
+    
+    #game-over-image {
+        width: 150px;
+        margin-bottom: 15px;
     }
     
     #difficulty-selector {
@@ -566,12 +739,13 @@ body {
     }
     
     .game-button {
-        font-size: 18px;
+        font-size:24px;
         padding: 10px 20px;
     }
 
     #score-submit-container {
         max-width: 250px;
+        margin: 15px 0;
     }
 
     .username-input {
@@ -582,6 +756,423 @@ body {
     .submit-message {
         font-size: 14px;
         padding: 6px 12px;
+    }
+    
+    .button-container {
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .menu-icon {
+        width: 32px;
+        height: 32px;
+        top: 8px;
+        right: 8px;
+        padding: 6px;
+    }
+
+    .menu-icon-line {
+        height: 2px;
+    }
+
+    .settings-window {
+        top: 50px;
+        right: 8px;
+        min-width: 200px;
+    }
+
+    .settings-window-content {
+        padding: 15px;
+    }
+
+    .settings-header h3 {
+        font-size: 18px;
+    }
+
+    .settings-body {
+        gap: 15px;
+    }
+
+    .settings-body .menu-option label {
+        font-size: 16px;
+    }
+
+    .settings-body .selector-controls {
+        font-size: 18px;
+        gap: 10px;
+    }
+
+    #difficulty-text,
+    #music-text {
+        font-size: 18px;
+        min-width: 80px;
+    }
+}
+
+/* Landscape orientation - use full width */
+@media (orientation: landscape) {
+    .screen {
+        max-width: 100vw;
+        min-width: 0;
+        width: 100%;
+        padding: 30px 40px;
+    }
+    
+    .screen h1 {
+        font-size: 48px;
+    }
+    
+    .settings-window {
+        top: 15px;
+        right: 15px;
+        min-width: 280px;
+        max-width: 350px;
+    }
+    
+    .settings-window-content {
+        padding: 15px 20px;
+    }
+    
+    .settings-body {
+        gap: 12px;
+    }
+    
+    .settings-body .menu-option label {
+        font-size: 15px;
+    }
+    
+    .settings-body .selector-controls {
+        font-size: 16px;
+        gap: 8px;
+    }
+}
+
+/* Landscape orientation for mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .screen {
+        padding: 15px 20px;
+        max-width: 100vw;
+        min-width: 0;
+        width: 100%;
+        top: 50%;
+    }
+    
+    .screen h1 {
+        font-size: 28px;
+        margin-bottom: 15px;
+        white-space: nowrap;
+    }
+    
+    .screen p {
+        font-size: 18px;
+        margin: 8px 0;
+    }
+    
+    #start-screen-image {
+        width: 100px;
+        margin-bottom: 10px;
+    }
+    
+    #game-over-image {
+        width: 80px;
+        margin-bottom: 8px;
+    }
+    
+    #start-screen-content {
+        gap: 15px;
+    }
+    
+    #leaderboard-container {
+        min-width: 180px;
+        max-width: 220px;
+    }
+    
+    #leaderboard-container h2 {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    #leaderboard-table {
+        font-size: 11px;
+    }
+    
+    #leaderboard-table th {
+        font-size: 11px;
+        padding: 3px 5px;
+    }
+    
+    #leaderboard-table td {
+        font-size: 11px;
+        padding: 2px 5px;
+    }
+    
+    .game-button {
+        font-size: 20px;
+        padding: 8px 16px;
+    }
+    
+    #score-submit-container {
+        max-width: 220px;
+        margin: 10px 0;
+    }
+    
+    #game-over-image {
+        width: 70px;
+        margin-bottom: 6px;
+    }
+    
+    .button-container {
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .button-container .game-button {
+        font-size: 18px;
+        padding: 6px 14px;
+    }
+    
+    .username-input {
+        font-size: 14px;
+        padding: 6px 10px;
+    }
+    
+    .submit-message {
+        font-size: 12px;
+        padding: 5px 10px;
+    }
+    
+    #instructions {
+        bottom: 5px;
+        padding: 0 8px;
+        gap: 4px;
+    }
+    
+    .instruction-item {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+    
+    .instruction-item p {
+        font-size: 11px;
+    }
+    
+    .menu-icon {
+        width: 28px;
+        height: 28px;
+        top: 5px;
+        right: 5px;
+        padding: 5px;
+    }
+    
+    .settings-window {
+        top: 35px;
+        right: 5px;
+        min-width: 160px;
+        max-width: 200px;
+    }
+    
+    .settings-window-content {
+        padding: 10px;
+    }
+    
+    .settings-header {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+    }
+    
+    .settings-header h3 {
+        font-size: 14px;
+    }
+    
+    .settings-body {
+        gap: 10px;
+    }
+    
+    .settings-body .menu-option {
+        gap: 5px;
+    }
+    
+    .settings-body .menu-option label {
+        font-size: 13px;
+    }
+    
+    .settings-body .selector-controls {
+        font-size: 14px;
+        gap: 6px;
+    }
+    
+    #difficulty-text,
+    #music-text {
+        font-size: 14px;
+        min-width: 60px;
+    }
+    
+    .settings-body .instruction-item {
+        font-size: 10px;
+        padding: 2px 0;
+    }
+    
+    .settings-body .instruction-item p {
+        font-size: 10px;
+    }
+    
+    .settings-body .instructions-content {
+        gap: 3px;
+    }
+}
+
+/* Landscape Warning */
+.landscape-warning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.landscape-warning.hidden {
+    display: none;
+}
+
+.landscape-warning-content {
+    background: rgba(245, 245, 220, 0.98);
+    border: 2px solid #333;
+    border-radius: 10px;
+    padding: 30px 40px;
+    text-align: center;
+    max-width: 300px;
+    /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); */
+}
+
+.landscape-warning-content h2 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.landscape-warning-content p {
+    font-size: 16px;
+    margin: 10px 0;
+    color: #666;
+}
+
+.landscape-warning-content .game-button {
+    margin-top: 20px;
+}
+
+@media (max-width: 768px) {
+    .landscape-warning-content {
+        padding: 20px 30px;
+        max-width: 250px;
+    }
+    
+    .landscape-warning-content h2 {
+        font-size: 20px;
+    }
+    
+    .landscape-warning-content p {
+        font-size: 14px;
+    }
+}
+
+/* First Time Tutorial */
+.first-time-tutorial {
+    position: fixed;
+    top: 70px;
+    right: 15px;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+.first-time-tutorial.hidden {
+    display: none;
+}
+
+.tutorial-arrow {
+    position: absolute;
+    top: -30px;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-bottom: 30px solid rgba(245, 245, 220, 0.98);
+    color: #000000;
+    /* filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); */
+}
+
+.first-time-tutorial-content {
+    background: rgba(245, 245, 220, 0.98);
+    border: 2px solid #333;
+    border-radius: 10px;
+    padding: 20px;
+    max-width: 280px;
+    /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); */
+    pointer-events: auto;
+}
+
+.first-time-tutorial-content h3 {
+    font-size: 20px;
+    margin-bottom: 12px;
+    color: #333;
+    text-transform: lowercase;
+}
+
+.first-time-tutorial-content p {
+    font-size: 14px;
+    margin: 8px 0;
+    color: #666;
+    line-height: 1.4;
+}
+
+.first-time-tutorial-content ul {
+    margin: 10px 0;
+    padding-left: 20px;
+    color: #666;
+    font-size: 14px;
+}
+
+.first-time-tutorial-content li {
+    margin: 6px 0;
+    line-height: 1.4;
+}
+
+.first-time-tutorial-content .game-button {
+    margin-top: 15px;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .first-time-tutorial {
+        top: 50px;
+        right: 8px;
+        max-width: calc(100vw - 20px);
+    }
+    
+    .first-time-tutorial-content {
+        max-width: 240px;
+        padding: 15px;
+    }
+    
+    .first-time-tutorial-content h3 {
+        font-size: 18px;
+    }
+    
+    .first-time-tutorial-content p,
+    .first-time-tutorial-content ul {
+        font-size: 12px;
+    }
+    
+    .tutorial-arrow {
+        top: -25px;
+        border-left: 12px solid transparent;
+        border-right: 12px solid transparent;
+        border-bottom: 25px solid rgba(245, 245, 220, 0.98);
     }
 }
 
