@@ -664,11 +664,11 @@ export class Game {
   private startGame(): void {
     // Stop leaderboard auto-scroll when game starts
     this.stopLeaderboardAutoScroll();
-    
+
     // Check if mobile and in portrait orientation
     const isMobile = window.innerWidth <= 768;
     const isPortrait = window.innerHeight > window.innerWidth;
-    
+
     if (isMobile && isPortrait) {
       // Pause game and show landscape warning
       this.isGamePausedForOrientation = true;
@@ -676,11 +676,11 @@ export class Game {
       this.landscapeWarning.classList.remove("hidden");
       return;
     }
-    
+
     // If warning was showing, hide it
     this.landscapeWarning.classList.add("hidden");
     this.isGamePausedForOrientation = false;
-    
+
     this.state = GameState.PLAYING;
     this.startScreen.classList.add("hidden");
     this.instructions.classList.add("hidden");
@@ -1915,7 +1915,7 @@ export class Game {
 
   private checkFirstTimeUser(): void {
     const hasSeenTutorial = localStorage.getItem("gatsbys-world-tutorial-seen");
-    
+
     // Show tutorial if it hasn't been seen (null, undefined, or "false")
     if (!hasSeenTutorial || hasSeenTutorial === "false") {
       // Show tutorial after a short delay to ensure page is loaded
